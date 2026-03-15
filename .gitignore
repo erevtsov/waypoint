@@ -43,3 +43,6 @@ coverage.xml
 
 # uv — library convention: don't commit the lock file
 uv.lock
+
+# personal notebooks/examples
+/notebooks/personal/
