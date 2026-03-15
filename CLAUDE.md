@@ -7,7 +7,7 @@
 - Analysis functions are stateless; accept domain objects (Asset, Portfolio) or bare Series
 
 ## Commands
-- `uv sync --extra dev` — install all dev dependencies
+- `uv sync --extra dev` — install all dev dependencies (includes vendor SDKs)
 - `uv run pytest` — run tests with coverage
 - `uv run ruff check src/ tests/` — lint
 - `uv run mypy` — type-check
@@ -15,17 +15,29 @@
 
 ## Architecture
 - `src/waypoint/` — package root; `__init__.py` exposes `__version__` only
+- `src/waypoint/instruments.py` — `Instrument` dataclass (name, symbol, vendor, frequency, metadata)
+- `src/waypoint/assets.py` — `Asset` dataclass; `PERIODS_PER_YEAR` constant dict
+- `src/waypoint/catalog.py` — built-in `Instrument` constants (SPY, AGG, FRED series, etc.)
+- `src/waypoint/data/` — fetch API + parquet cache + vendor providers
+  - `data/__init__.py` — exposes `fetch(instrument, start, end, force_refresh=False)`
+  - `data/cache.py` — parquet read/write; cache key = `{vendor}/{symbol}.parquet`
+  - `data/normalize.py` — raw prices → decimal return `pl.Series`
+  - `data/providers/base.py` — `Provider` Protocol
+  - `data/providers/{yfinance,fred,eodhd}.py` — one file per vendor
 - `src/waypoint/analysis/` — stateless functions operating on `pl.Series` or domain objects
 - `tests/` — mirrors src structure: `src/waypoint/foo.py` → `tests/test_foo.py`
 
 ## Conventions
 - Always use decimal returns, never percentages or prices
-- Always require a date index on any return series — enforce in `__post_init__`
 - Always add analysis as free functions in `analysis/`; never as domain object methods
 - Analysis functions accept domain objects (Asset, Portfolio) or `pl.Series` directly
 - Use polars for all time series and tabular data; never pandas
 - Use `importlib.metadata.version("waypoint")` for `__version__` — never hardcode it
 - Use `np.random.default_rng(seed=42)` for reproducible test data
+- Vendor SDKs (yfinance, fredapi, eodhd) live in optional extras, never in `[project.dependencies]`
+- For daily instruments, `fetch()` snaps date range to full calendar months — Asset.returns may cover a wider range than requested
+- Cache key includes vendor: changing `Instrument.vendor` starts a fresh cache
+- `force_refresh=True` on `fetch()` bypasses cache and overwrites with fresh vendor data
 - Prefer explicit over implicit — no clever one-liners that obscure intent
 - Never introduce a TODO without an inline explanation
 - Never hardcode magic numbers — name constants explicitly
@@ -54,5 +66,5 @@
 ## Never Do
 - Never store prices internally — the library starts at returns
 - Never use pandas — use polars instead
-- Never add matplotlib, plotly, or data-fetching libs to core dependencies
+- Never add vendor SDKs to `[project.dependencies]` — use optional extras
 - Never commit `uv.lock` — this is a library, not an application
