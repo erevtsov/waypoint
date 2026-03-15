@@ -22,11 +22,16 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=1.26",
-    "pandas>=2.2",
+    "polars>=1.0",
+    "python-dotenv>=1.0",
     "scipy>=1.13",
 ]
 
 [project.optional-dependencies]
+yfinance = ["yfinance>=0.2"]
+fred     = ["fredapi>=0.5"]
+eodhd    = ["eodhd>=1.0"]
+data     = ["waypoint[yfinance,fred,eodhd]"]
 test = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
@@ -36,10 +41,9 @@ lint = [
 ]
 typecheck = [
     "mypy>=1.10",
-    "pandas-stubs>=2.2",
 ]
 dev = [
-    "waypoint[test,lint,typecheck]",
+    "waypoint[data,test,lint,typecheck]",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -68,6 +72,10 @@ warn_return_any = true
 warn_unused_configs = true
 mypy_path = "src"
 packages = ["waypoint"]
+
+[[tool.mypy.overrides]]
+module = ["yfinance", "fredapi", "eodhd"]
+ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
 # Pytest
