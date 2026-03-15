@@ -12,12 +12,14 @@ def test_frequency_str_equality() -> None:
     assert Frequency.DAILY == "daily"
     assert Frequency.WEEKLY == "weekly"
     assert Frequency.MONTHLY == "monthly"
+    assert Frequency.QUARTERLY == "quarterly"
     assert Frequency.ANNUAL == "annual"
 
 
 def test_frequency_from_string() -> None:
     assert Frequency("daily") is Frequency.DAILY
     assert Frequency("monthly") is Frequency.MONTHLY
+    assert Frequency("quarterly") is Frequency.QUARTERLY
 
 
 def test_frequency_invalid_raises() -> None:
@@ -29,6 +31,7 @@ def test_periods_per_year_values() -> None:
     assert PERIODS_PER_YEAR[Frequency.DAILY] == 252
     assert PERIODS_PER_YEAR[Frequency.WEEKLY] == 52
     assert PERIODS_PER_YEAR[Frequency.MONTHLY] == 12
+    assert PERIODS_PER_YEAR[Frequency.QUARTERLY] == 4
     assert PERIODS_PER_YEAR[Frequency.ANNUAL] == 1
 
 

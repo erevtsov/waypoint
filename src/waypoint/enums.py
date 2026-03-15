@@ -17,6 +17,7 @@ class Frequency(StrEnum):
     DAILY = "daily"
     WEEKLY = "weekly"
     MONTHLY = "monthly"
+    QUARTERLY = "quarterly"
     ANNUAL = "annual"
 
 
@@ -37,12 +38,13 @@ PERIODS_PER_YEAR: dict[Frequency, int] = {
     Frequency.DAILY: 252,
     Frequency.WEEKLY: 52,
     Frequency.MONTHLY: 12,
+    Frequency.QUARTERLY: 4,
     Frequency.ANNUAL: 1,
 }
 
 #: Frequencies that are valid for ``AssetDef`` / ``Asset`` (no ANNUAL).
 ASSET_FREQUENCIES: frozenset[Frequency] = frozenset(
-    {Frequency.DAILY, Frequency.WEEKLY, Frequency.MONTHLY}
+    {Frequency.DAILY, Frequency.WEEKLY, Frequency.MONTHLY, Frequency.QUARTERLY}
 )
 
 #: Frequencies that are valid for ``PeriodicCashflow`` (no WEEKLY / DAILY).

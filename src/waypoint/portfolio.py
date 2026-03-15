@@ -26,6 +26,7 @@ _WEIGHT_TOLERANCE = 1e-9
 _RESAMPLE_EVERY: dict[Frequency, str] = {
     Frequency.WEEKLY: "1w",
     Frequency.MONTHLY: "1mo",
+    Frequency.QUARTERLY: "1q",
     Frequency.ANNUAL: "1y",
 }
 
@@ -36,6 +37,11 @@ def _resample_wide(wide: pl.DataFrame, to_freq: Frequency) -> pl.DataFrame:
     No-op when *to_freq* is ``Frequency.DAILY``.  Each column other than
     ``"date"`` is treated as a decimal return series and compounded within
     each calendar interval.
+
+    Dates are aligned to the *end* of each period: ``label="right"`` in
+    polars produces the start of the following interval, so we subtract one
+    day to obtain the conventional end-of-period date (e.g. Mar 31 for Q1,
+    Jan 31 for January).
     """
     every = _RESAMPLE_EVERY.get(to_freq)
     if every is None:
@@ -43,8 +49,9 @@ def _resample_wide(wide: pl.DataFrame, to_freq: Frequency) -> pl.DataFrame:
     return_cols = [c for c in wide.columns if c != "date"]
     return (
         wide.sort("date")
-        .group_by_dynamic("date", every=every)
+        .group_by_dynamic("date", every=every, label="right")
         .agg([((1 + pl.col(c)).product() - 1).alias(c) for c in return_cols])
+        .with_columns(pl.col("date") - pl.duration(days=1))
         .sort("date")
     )
 
