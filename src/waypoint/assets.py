@@ -40,16 +40,26 @@ class Asset:
 
     name: str
     ticker: str
-    returns: pl.Series
+    returns: pl.DataFrame
     frequency: str
     asset_class: str = ""
     sub_asset_class: str = ""
     geography: str = ""
 
     def __post_init__(self) -> None:
-        if self.returns.dtype not in (pl.Float32, pl.Float64):
+        cols = self.returns.columns
+        if cols != ["date", "returns"]:
             raise TypeError(
-                f"Asset.returns must be a float Series, got dtype {self.returns.dtype}"
+                f"Asset.returns must be a DataFrame with columns ['date', 'returns'], got {cols}"
+            )
+        if self.returns["date"].dtype != pl.Date:
+            raise TypeError(
+                f"Asset.returns['date'] must be pl.Date, got {self.returns['date'].dtype}"
+            )
+        if self.returns["returns"].dtype not in (pl.Float32, pl.Float64):
+            raise TypeError(
+                f"Asset.returns['returns'] must be a float column, "
+                f"got {self.returns['returns'].dtype}"
             )
         from waypoint.instruments import VALID_FREQUENCIES  # avoid circular at module level
 
@@ -65,7 +75,7 @@ class Asset:
         return PERIODS_PER_YEAR[self.frequency]
 
     @classmethod
-    def from_instrument(cls, instrument: Instrument, returns: pl.Series) -> Asset:
+    def from_instrument(cls, instrument: Instrument, returns: pl.DataFrame) -> Asset:
         """Construct an Asset from an ``Instrument`` and a return series.
 
         Copies all metadata fields from the instrument so they flow through

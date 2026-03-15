@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import polars as pl
 
@@ -27,9 +27,10 @@ class YFinanceProvider:
             ) from exc
 
         ticker = yf.Ticker(symbol)
+        # yfinance end is exclusive; add one day to match our inclusive convention
         raw = ticker.history(
             start=start.isoformat(),
-            end=end.isoformat(),
+            end=(end + timedelta(days=1)).isoformat(),
             auto_adjust=True,
         )
         if raw.empty:

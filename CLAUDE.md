@@ -21,7 +21,7 @@
 - `src/waypoint/data/` — fetch API + parquet cache + vendor providers
   - `data/__init__.py` — exposes `fetch(instrument, start, end, force_refresh=False)`
   - `data/cache.py` — parquet read/write; cache key = `{vendor}/{symbol}.parquet`
-  - `data/normalize.py` — raw prices → decimal return `pl.Series`
+  - `data/normalize.py` — raw prices → `pl.DataFrame[date, returns]` (date column always preserved)
   - `data/providers/base.py` — `Provider` Protocol
   - `data/providers/{yfinance,fred,eodhd}.py` — one file per vendor
 - `src/waypoint/analysis/` — stateless functions operating on `pl.Series` or domain objects
@@ -31,6 +31,8 @@
 - Always use decimal returns, never percentages or prices
 - Always add analysis as free functions in `analysis/`; never as domain object methods
 - Analysis functions accept domain objects (Asset, Portfolio) or `pl.Series` directly
+- `Asset.returns` is a `pl.DataFrame` with columns `["date"(pl.Date), "returns"(pl.Float64)]` — never a bare Series
+- Combine assets by joining on `"date"`: `asset1.returns.join(asset2.returns, on="date", how="inner")`
 - Use polars for all time series and tabular data; never pandas
 - Use `importlib.metadata.version("waypoint")` for `__version__` — never hardcode it
 - Use `np.random.default_rng(seed=42)` for reproducible test data

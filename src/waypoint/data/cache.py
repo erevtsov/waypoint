@@ -125,13 +125,21 @@ def load_or_fetch(
         new_frames: list[pl.DataFrame] = []
 
         if need_before:
-            new_frames.append(
-                fetch_fn.fetch_raw(symbol, start, cached_min - timedelta(days=1))
-            )
+            # Gap may be entirely non-trading days (holidays/weekends); skip if empty
+            try:
+                new_frames.append(
+                    fetch_fn.fetch_raw(symbol, start, cached_min - timedelta(days=1))
+                )
+            except ValueError:
+                pass
         if need_after:
-            new_frames.append(
-                fetch_fn.fetch_raw(symbol, cached_max + timedelta(days=1), end)
-            )
+            # Gap may be entirely non-trading days (holidays/weekends); skip if empty
+            try:
+                new_frames.append(
+                    fetch_fn.fetch_raw(symbol, cached_max + timedelta(days=1), end)
+                )
+            except ValueError:
+                pass
 
         if new_frames:
             combined = pl.concat([cached, *new_frames]).unique("date").sort("date")

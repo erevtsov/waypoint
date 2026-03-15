@@ -120,3 +120,45 @@ def test_force_refresh_bypasses_cache(tmp_path: pytest.fixture) -> None:  # type
 
     finally:
         del os.environ["WAYPOINT_CACHE_DIR"]
+
+
+def test_second_call_with_holiday_end_does_not_error(tmp_path: pytest.fixture) -> None:  # type: ignore[type-arg]
+    """Regression: if requested end is a holiday/weekend the gap-fill fetch returns
+    no data.  The second call must not raise — it should return the cached data as-is.
+    """
+    import os
+
+    os.environ["WAYPOINT_CACHE_DIR"] = str(tmp_path)
+
+    try:
+        from waypoint.data.cache import load_or_fetch
+
+        # Provider returns data only through Jan 3 (Jan 4-5 are weekend)
+        trading_dates = [date(2020, 1, 2), date(2020, 1, 3)]
+        trading_df = pl.DataFrame({"date": trading_dates, "close": [100.0, 101.0]})
+
+        class _HolidayProvider:
+            called: int = 0
+
+            def fetch_raw(self, symbol: str, start: date, end: date) -> pl.DataFrame:
+                self.called += 1
+                result = trading_df.filter(
+                    (pl.col("date") >= start) & (pl.col("date") <= end)
+                )
+                if result.is_empty():
+                    raise ValueError(f"No data for {symbol} between {start} and {end}")
+                return result
+
+        provider = _HolidayProvider()
+
+        # First call: data covers Jan 2-3; requested end is Jan 5 (weekend)
+        result1 = load_or_fetch("v", "TST", date(2020, 1, 2), date(2020, 1, 5), provider)
+        assert provider.called == 1
+        assert len(result1) == 2
+
+        # Second call with same range must not raise even though Jan 4-5 have no data
+        result2 = load_or_fetch("v", "TST", date(2020, 1, 2), date(2020, 1, 5), provider)
+        assert len(result2) == 2
+
+    finally:
+        del os.environ["WAYPOINT_CACHE_DIR"]

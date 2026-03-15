@@ -5,8 +5,8 @@ from __future__ import annotations
 import polars as pl
 
 
-def to_returns(df: pl.DataFrame) -> pl.Series:
-    """Convert a raw price DataFrame to a decimal periodic return Series.
+def to_returns(df: pl.DataFrame) -> pl.DataFrame:
+    """Convert a raw price DataFrame to a date/returns DataFrame.
 
     Parameters
     ----------
@@ -17,14 +17,16 @@ def to_returns(df: pl.DataFrame) -> pl.Series:
 
     Returns
     -------
-    pl.Series
-        Series of decimal periodic returns named ``"returns"``.
-        The first observation is dropped (no predecessor to diff against),
+    pl.DataFrame
+        DataFrame with columns ``"date"`` (``pl.Date``) and ``"returns"``
+        (``pl.Float64``) of decimal periodic returns.
+        The first row is dropped (no predecessor to diff against),
         so the output has one fewer row than the input.
     """
     df = df.sort("date")
-    pct = df.select(
-        pl.col("close").pct_change().alias("returns")
-    ).get_column("returns")
-    # Drop the first row (null from pct_change) and return
-    return pct.drop_nulls()
+    result = df.select(
+        pl.col("date"),
+        pl.col("close").pct_change().alias("returns"),
+    )
+    # Drop the first row (null returns from pct_change)
+    return result.drop_nulls()

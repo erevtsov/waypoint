@@ -26,7 +26,7 @@ from waypoint.instruments import Instrument
 # ---------------------------------------------------------------------------
 US_LARGE_CAP = Instrument(
     name="US Large Cap Equities",
-    symbol="SPY",
+    symbol="^SPX",
     vendor="yfinance",
     frequency="daily",
     asset_class="Equities",
@@ -36,7 +36,7 @@ US_LARGE_CAP = Instrument(
 
 US_SMALL_CAP = Instrument(
     name="US Small Cap Equities",
-    symbol="IWM",
+    symbol="^RUT",
     vendor="yfinance",
     frequency="daily",
     asset_class="Equities",
