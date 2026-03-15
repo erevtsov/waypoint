@@ -1,4 +1,4 @@
-"""Asset: a single investable instrument with a named return series."""
+"""Asset and LeveragedAsset: investable instruments with return series."""
 
 from __future__ import annotations
 
@@ -97,4 +97,78 @@ class Asset:
             asset_class=asset_def.asset_class,
             sub_asset_class=asset_def.sub_asset_class,
             geography=asset_def.geography,
+        )
+
+
+@dataclass(frozen=True)
+class LeveragedAsset:
+    """An asset wrapper that applies a constant-leverage return transformation.
+
+    Models any leveraged position: a mortgaged property, a margin account, or
+    a leveraged ETF.  The leveraged period return is computed as::
+
+        r_lev = leverage_ratio × r_asset
+                − (leverage_ratio − 1) × (financing_cost / periods_per_year)
+
+    This assumes *constant* leverage rebalancing each period (analogous to a
+    leveraged ETF), not an amortising fixed-amount loan.  For a mortgage, the
+    leverage ratio decreases over time as principal is repaid; using the ratio
+    at inception is a reasonable approximation for long-horizon simulations.
+
+    Parameters
+    ----------
+    asset:
+        The underlying asset whose returns are leveraged.
+    leverage_ratio:
+        Total asset exposure divided by equity.  A $600 K property with $400 K
+        equity has leverage_ratio = 1.5.  Must be > 0.  Use 1.0 for no leverage.
+    financing_cost:
+        Annual rate on the borrowed portion (e.g. ``0.065`` for 6.5%).  Must
+        be >= 0.
+    name:
+        Display name.  Defaults to the underlying asset's name when omitted.
+    """
+
+    asset: Asset
+    leverage_ratio: float
+    financing_cost: float
+    name: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            object.__setattr__(self, "name", self.asset.name)
+        if self.leverage_ratio <= 0:
+            raise ValueError(f"leverage_ratio must be > 0, got {self.leverage_ratio}")
+        if self.financing_cost < 0:
+            raise ValueError(f"financing_cost must be >= 0, got {self.financing_cost}")
+
+    @property
+    def ticker(self) -> str:
+        """Ticker of the underlying asset."""
+        return self.asset.ticker
+
+    @property
+    def frequency(self) -> Frequency:
+        """Observation frequency of the underlying asset."""
+        return self.asset.frequency
+
+    @property
+    def periods_per_year(self) -> int:
+        """Periods per year implied by the underlying asset's frequency."""
+        return self.asset.periods_per_year
+
+    @property
+    def returns(self) -> pl.DataFrame:
+        """Full leveraged return series derived from the underlying asset."""
+        return self._apply_leverage(self.asset.returns)
+
+    def get_returns(self, start: date | str, end: date | str) -> pl.DataFrame:
+        """Return the leveraged ``["date", "returns"]`` DataFrame filtered to *[start, end]*."""
+        return self._apply_leverage(self.asset.get_returns(start, end))
+
+    def _apply_leverage(self, df: pl.DataFrame) -> pl.DataFrame:
+        cost_per_period = self.financing_cost / self.periods_per_year
+        borrowed = self.leverage_ratio - 1.0
+        return df.with_columns(
+            (self.leverage_ratio * pl.col("returns") - borrowed * cost_per_period).alias("returns")
         )

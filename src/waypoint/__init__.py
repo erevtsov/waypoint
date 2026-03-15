@@ -4,7 +4,7 @@ from importlib.metadata import version
 
 from waypoint import analytics, cashflows, catalog, returns, risk, sim
 from waypoint.asset_def import AssetDef
-from waypoint.assets import Asset
+from waypoint.assets import Asset, LeveragedAsset
 from waypoint.constraints import DEFAULT_CONSTRAINTS, LongOnly, SumToOne, WeightBounds
 from waypoint.data import fetch
 from waypoint.enums import CashflowMode, Frequency
@@ -31,6 +31,7 @@ __all__ = [
     "IndicatorDef",
     # domain objects
     "Asset",
+    "LeveragedAsset",
     "Indicator",
     "Portfolio",
     # data

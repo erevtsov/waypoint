@@ -10,15 +10,15 @@ import polars as pl
 
 if TYPE_CHECKING:
     from waypoint.asset_def import AssetDef
-    from waypoint.assets import Asset
+    from waypoint.assets import Asset, LeveragedAsset
 
 from waypoint.enums import Frequency
 
 # Sentinel used as cache key when no date range is specified
 _NO_DATE = date(1, 1, 1)
 
-# Slot value can be a pre-loaded Asset or a definition to fetch lazily
-Slot = "Asset | AssetDef"
+# Slot value can be a pre-loaded Asset, a leveraged wrapper, or a definition to fetch lazily
+Slot = "Asset | LeveragedAsset | AssetDef"
 
 _WEIGHT_TOLERANCE = 1e-9
 
@@ -80,7 +80,7 @@ class Portfolio:
 
     def __init__(
         self,
-        slots: dict[str, Asset | AssetDef],
+        slots: dict[str, Asset | LeveragedAsset | AssetDef],
         weights: dict[str, float],
         name: str = "",
         normalize_weights: bool = True,
@@ -104,7 +104,7 @@ class Portfolio:
         else:
             self._weights = dict(weights)
 
-        self._slots: dict[str, Asset | AssetDef] = dict(slots)
+        self._slots: dict[str, Asset | LeveragedAsset | AssetDef] = dict(slots)
         self.name = name
 
         # Mutable cache: keyed by (start, end, frequency) -> wide pl.DataFrame
@@ -115,7 +115,7 @@ class Portfolio:
     # ------------------------------------------------------------------
 
     @property
-    def slots(self) -> dict[str, Asset | AssetDef]:
+    def slots(self) -> dict[str, Asset | LeveragedAsset | AssetDef]:
         """The slot definitions (read-only view)."""
         return dict(self._slots)
 
@@ -158,7 +158,7 @@ class Portfolio:
             resolution of the underlying data (typically daily).
         """
         from waypoint.asset_def import AssetDef
-        from waypoint.assets import Asset
+        from waypoint.assets import Asset, LeveragedAsset
         from waypoint.data import fetch
 
         has_defs = any(isinstance(s, AssetDef) for s in self._slots.values())
@@ -182,7 +182,7 @@ class Portfolio:
                 asset = fetch(slot, start=start_dt, end=end_dt)  # type: ignore[arg-type]
                 returns_df = asset.returns
             else:
-                assert isinstance(slot, Asset)
+                assert isinstance(slot, (Asset, LeveragedAsset))
                 returns_df = (
                     slot.get_returns(start_dt, end_dt)  # type: ignore[arg-type]
                     if start_dt is not None
