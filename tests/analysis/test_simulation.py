@@ -19,7 +19,7 @@ from waypoint.portfolio import Portfolio
 # ---------------------------------------------------------------------------
 
 N_PERIODS = 200
-PERIODS_PER_YEAR = 12
+PERIODS_PER_YEAR = 252
 HORIZON_YEARS = 10
 N_SIMULATIONS = 200  # small for test speed
 
@@ -38,9 +38,9 @@ def _make_asset(name: str, ticker: str, mean: float, std: float, seed: int) -> A
 
 
 def _make_portfolio(positive_mu: bool = True) -> Portfolio:
-    mean = 0.0003 if positive_mu else -0.0001
+    mean = 0.001 if positive_mu else -0.001
     eq = _make_asset("Equities", "EQ", mean=mean, std=0.01, seed=10)
-    fi = _make_asset("Bonds", "FI", mean=0.0001, std=0.003, seed=11)
+    fi = _make_asset("Bonds", "FI", mean=0.0005, std=0.003, seed=11)
     return Portfolio(
         {"Equities": eq, "Bonds": fi},
         weights={"Equities": 0.6, "Bonds": 0.4},
@@ -60,7 +60,7 @@ def _make_simulation(
         initial_wealth=1_000_000.0,
         n_simulations=n_simulations,
     )
-    return sim.compute(portfolio, start=None, end=None, frequency="monthly")
+    return sim.compute(portfolio, start=None, end=None, frequency="daily")
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +168,7 @@ def test_bootstrap_shape() -> None:
         initial_wealth=100.0,
         n_simulations=50,
     )
-    result = sim.compute(portfolio, start=None, end=None, frequency="monthly")
+    result = sim.compute(portfolio, start=None, end=None, frequency="daily")
     expected_cols = HORIZON_YEARS * PERIODS_PER_YEAR + 1
     assert result.paths.shape == (50, expected_cols)
 
@@ -196,7 +196,7 @@ def test_percentile_df_has_date_column_when_start_date_given() -> None:
         n_simulations=N_SIMULATIONS,
     )
     result = sim.compute(
-        portfolio, start=None, end=None, frequency="monthly",
+        portfolio, start=None, end=None, frequency="daily",
         start_date=date(2025, 1, 1),
     )
     assert "date" in result.percentile_df.columns
@@ -219,7 +219,7 @@ def test_start_date_first_row_equals_start_date() -> None:
         n_simulations=N_SIMULATIONS,
     )
     result = sim.compute(
-        portfolio, start=None, end=None, frequency="monthly",
+        portfolio, start=None, end=None, frequency="daily",
         start_date=start,
     )
     assert result.percentile_df["date"][0] == start
@@ -234,7 +234,7 @@ def test_start_date_accepts_string() -> None:
         n_simulations=N_SIMULATIONS,
     )
     result = sim.compute(
-        portfolio, start=None, end=None, frequency="monthly",
+        portfolio, start=None, end=None, frequency="daily",
         start_date="2025-01-01",
     )
     assert result.start_date == date(2025, 1, 1)
@@ -255,8 +255,8 @@ def test_real_mode_reduces_terminal_wealth() -> None:
         n_simulations=N_SIMULATIONS,
         inflation_rate=0.03,
     )
-    nominal = sim.compute(portfolio, start=None, end=None, frequency="monthly", real=False)
-    real = sim.compute(portfolio, start=None, end=None, frequency="monthly", real=True)
+    nominal = sim.compute(portfolio, start=None, end=None, frequency="daily", real=False)
+    real = sim.compute(portfolio, start=None, end=None, frequency="daily", real=True)
 
     assert real.summary()["median_terminal"] < nominal.summary()["median_terminal"]
     assert real.is_real is True
@@ -273,7 +273,7 @@ def test_real_mode_initial_wealth_unchanged() -> None:
         n_simulations=N_SIMULATIONS,
         inflation_rate=0.03,
     )
-    result = sim.compute(portfolio, start=None, end=None, frequency="monthly", real=True)
+    result = sim.compute(portfolio, start=None, end=None, frequency="daily", real=True)
     np.testing.assert_array_equal(result.paths[:, 0], 1_000_000.0)
 
 
@@ -287,6 +287,6 @@ def test_zero_inflation_real_equals_nominal() -> None:
         n_simulations=N_SIMULATIONS,
         inflation_rate=0.0,
     )
-    nominal = sim.compute(portfolio, start=None, end=None, frequency="monthly", real=False)
-    real = sim.compute(portfolio, start=None, end=None, frequency="monthly", real=True)
+    nominal = sim.compute(portfolio, start=None, end=None, frequency="daily", real=False)
+    real = sim.compute(portfolio, start=None, end=None, frequency="daily", real=True)
     np.testing.assert_array_almost_equal(real.paths, nominal.paths)

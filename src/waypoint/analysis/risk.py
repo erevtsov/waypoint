@@ -75,8 +75,9 @@ class Risk:
         -------
         RiskResult
         """
-        periods_per_year = PERIODS_PER_YEAR[Frequency(frequency)]
-        wide = portfolio.get_returns(start, end)
+        freq = Frequency(frequency)
+        periods_per_year = PERIODS_PER_YEAR[freq]
+        wide = portfolio.get_returns(start, end, frequency=freq)
         asset_cols = [c for c in wide.columns if c != "date"]
         returns_only = wide.select(asset_cols)
 

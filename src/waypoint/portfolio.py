@@ -12,6 +12,8 @@ if TYPE_CHECKING:
     from waypoint.asset_def import AssetDef
     from waypoint.assets import Asset
 
+from waypoint.enums import Frequency
+
 # Sentinel used as cache key when no date range is specified
 _NO_DATE = date(1, 1, 1)
 
@@ -19,6 +21,32 @@ _NO_DATE = date(1, 1, 1)
 Slot = "Asset | AssetDef"
 
 _WEIGHT_TOLERANCE = 1e-9
+
+# Polars group_by_dynamic interval string for each non-daily frequency
+_RESAMPLE_EVERY: dict[Frequency, str] = {
+    Frequency.WEEKLY: "1w",
+    Frequency.MONTHLY: "1mo",
+    Frequency.ANNUAL: "1y",
+}
+
+
+def _resample_wide(wide: pl.DataFrame, to_freq: Frequency) -> pl.DataFrame:
+    """Compound per-period returns in *wide* to the target frequency.
+
+    No-op when *to_freq* is ``Frequency.DAILY``.  Each column other than
+    ``"date"`` is treated as a decimal return series and compounded within
+    each calendar interval.
+    """
+    every = _RESAMPLE_EVERY.get(to_freq)
+    if every is None:
+        return wide  # DAILY -- nothing to resample
+    return_cols = [c for c in wide.columns if c != "date"]
+    return (
+        wide.sort("date")
+        .group_by_dynamic("date", every=every)
+        .agg([((1 + pl.col(c)).product() - 1).alias(c) for c in return_cols])
+        .sort("date")
+    )
 
 
 class Portfolio:
@@ -31,14 +59,14 @@ class Portfolio:
     different date range is as simple as passing new ``start``/``end`` args.
 
     *Asset-first*: pass pre-loaded ``Asset`` values; ``get_returns`` filters
-    the existing data to the requested range — no network calls.
+    the existing data to the requested range -- no network calls.
 
     Parameters
     ----------
     slots:
-        Mapping of display name → ``Asset`` or ``AssetDef``.
+        Mapping of display name -> ``Asset`` or ``AssetDef``.
     weights:
-        Mapping of display name → weight (must use the same keys as *slots*).
+        Mapping of display name -> weight (must use the same keys as *slots*).
         By default, weights are normalised to sum to 1.0.  Pass
         ``normalize_weights=False`` for long-short portfolios where gross
         exposure may exceed 1.0 or weights are already in their intended form.
@@ -69,7 +97,7 @@ class Portfolio:
             total = sum(weights.values())
             if total == 0:
                 raise ValueError(
-                    "Weights sum to zero — cannot normalise. "
+                    "Weights sum to zero -- cannot normalise. "
                     "Pass normalize_weights=False for long-short portfolios."
                 )
             self._weights: dict[str, float] = {k: v / total for k, v in weights.items()}
@@ -79,8 +107,8 @@ class Portfolio:
         self._slots: dict[str, Asset | AssetDef] = dict(slots)
         self.name = name
 
-        # Mutable cache: keyed by (start, end) → wide pl.DataFrame
-        self._cache: dict[tuple[date, date], pl.DataFrame] = {}
+        # Mutable cache: keyed by (start, end, frequency) -> wide pl.DataFrame
+        self._cache: dict[tuple[date, date, Frequency | None], pl.DataFrame] = {}
 
     # ------------------------------------------------------------------
     # Public read-only properties
@@ -109,6 +137,7 @@ class Portfolio:
         self,
         start: date | str | None = None,
         end: date | str | None = None,
+        frequency: Frequency | str | None = None,
     ) -> pl.DataFrame:
         """Return a wide DataFrame with one column per slot, aligned on ``"date"``.
 
@@ -122,6 +151,11 @@ class Portfolio:
         start, end:
             Date range (inclusive).  Required when any slot is an ``AssetDef``;
             ignored for the alignment operation when all slots are ``Asset``.
+        frequency:
+            When provided, the raw (daily) returns are compounded up to this
+            frequency before being returned.  Accepts a ``Frequency`` member
+            or its lowercase string equivalent.  ``None`` returns the native
+            resolution of the underlying data (typically daily).
         """
         from waypoint.asset_def import AssetDef
         from waypoint.assets import Asset
@@ -136,8 +170,9 @@ class Portfolio:
 
         start_dt: date | None = date.fromisoformat(start) if isinstance(start, str) else start
         end_dt: date | None = date.fromisoformat(end) if isinstance(end, str) else end
+        freq: Frequency | None = Frequency(frequency) if frequency is not None else None
 
-        cache_key = (start_dt or _NO_DATE, end_dt or _NO_DATE)
+        cache_key = (start_dt or _NO_DATE, end_dt or _NO_DATE, freq)
         if cache_key in self._cache:
             return self._cache[cache_key]
 
@@ -160,6 +195,9 @@ class Portfolio:
         for frame in frames[1:]:
             wide = wide.join(frame, on="date", how="inner")
 
+        if freq is not None:
+            wide = _resample_wide(wide, freq)
+
         self._cache[cache_key] = wide
         return wide
 
@@ -167,12 +205,21 @@ class Portfolio:
         self,
         start: date | str | None = None,
         end: date | str | None = None,
+        frequency: Frequency | str | None = None,
     ) -> pl.DataFrame:
         """Return a ``["date", "returns"]`` DataFrame of portfolio-level returns.
 
         Portfolio return at each date = weighted sum of slot returns.
+
+        Parameters
+        ----------
+        start, end:
+            Date range (inclusive).
+        frequency:
+            When provided, slot returns are resampled to this frequency before
+            computing the weighted sum.  See ``get_returns`` for details.
         """
-        wide = self.get_returns(start, end)
+        wide = self.get_returns(start, end, frequency=frequency)
         asset_cols = [c for c in wide.columns if c != "date"]
         weighted: pl.Expr = reduce(
             lambda acc, name: acc + pl.col(name) * self._weights[name],

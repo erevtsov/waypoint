@@ -134,8 +134,9 @@ class WealthSimulation:
         -------
         SimulationResult
         """
-        periods_per_year = PERIODS_PER_YEAR[Frequency(frequency)]
-        port_returns_df = portfolio.portfolio_returns(start, end)
+        freq = Frequency(frequency)
+        periods_per_year = PERIODS_PER_YEAR[freq]
+        port_returns_df = portfolio.portfolio_returns(start, end, frequency=freq)
         hist_returns: np.ndarray = port_returns_df["returns"].to_numpy()
 
         # Estimate mu and sigma from historical portfolio returns

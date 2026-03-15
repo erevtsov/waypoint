@@ -2,17 +2,9 @@
 
 from importlib.metadata import version
 
-from waypoint import catalog
-from waypoint.analysis.expected_return import ExpectedReturn, ExpectedReturnResult
-from waypoint.analysis.methods.returns import HistoricalMean
-from waypoint.analysis.methods.risk import SampleCovariance
-from waypoint.analysis.methods.simulation import Bootstrap, MonteCarlo
-from waypoint.analysis.optimizer import EfficientFrontierResult, Optimizer
-from waypoint.analysis.risk import Risk, RiskResult
-from waypoint.analysis.simulation import SimulationResult, WealthSimulation
+from waypoint import analytics, cashflows, catalog, returns, risk, sim
 from waypoint.asset_def import AssetDef
 from waypoint.assets import Asset
-from waypoint.cashflows import CashflowDefinition, LumpSum, PeriodicCashflow
 from waypoint.constraints import DEFAULT_CONSTRAINTS, LongOnly, SumToOne, WeightBounds
 from waypoint.data import fetch
 from waypoint.enums import CashflowMode, Frequency
@@ -25,7 +17,12 @@ __version__: str = version("waypoint")
 __all__ = [
     "__version__",
     # sub-modules
+    "analytics",
     "catalog",
+    "cashflows",
+    "returns",
+    "risk",
+    "sim",
     # enums
     "CashflowMode",
     "Frequency",
@@ -38,27 +35,9 @@ __all__ = [
     "Portfolio",
     # data
     "fetch",
-    # cashflows
-    "CashflowDefinition",
-    "LumpSum",
-    "PeriodicCashflow",
     # constraints
     "DEFAULT_CONSTRAINTS",
     "LongOnly",
     "SumToOne",
     "WeightBounds",
-    # analytics
-    "ExpectedReturn",
-    "ExpectedReturnResult",
-    "Risk",
-    "RiskResult",
-    "Optimizer",
-    "EfficientFrontierResult",
-    "WealthSimulation",
-    "SimulationResult",
-    # methods
-    "HistoricalMean",
-    "SampleCovariance",
-    "Bootstrap",
-    "MonteCarlo",
 ]
