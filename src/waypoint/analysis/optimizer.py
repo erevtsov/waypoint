@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 from waypoint.analysis.expected_return import ExpectedReturn
 from waypoint.analysis.risk import Risk
 from waypoint.constraints import Constraint
+from waypoint.enums import Frequency
 
 
 @dataclass
@@ -100,7 +101,7 @@ class Optimizer:
         portfolio: Portfolio,
         start: date | str | None,
         end: date | str | None,
-        periods_per_year: int,
+        frequency: Frequency | str,
         n_points: int = 50,
     ) -> EfficientFrontierResult:
         """Compute the efficient frontier.
@@ -116,8 +117,9 @@ class Optimizer:
             Portfolio whose assets define the investment universe.
         start, end:
             Historical date range used to estimate mu and Sigma.
-        periods_per_year:
-            Annualisation factor.
+        frequency:
+            Observation frequency used to annualise returns and covariance.
+            Accepts a ``Frequency`` member or its lowercase string equivalent.
         n_points:
             Number of return targets to try along the frontier.
 
@@ -125,8 +127,9 @@ class Optimizer:
         -------
         EfficientFrontierResult
         """
-        er_result = self.return_model.compute(portfolio, start, end, periods_per_year)
-        risk_result = self.risk_model.compute(portfolio, start, end, periods_per_year)
+        freq = Frequency(frequency)
+        er_result = self.return_model.compute(portfolio, start, end, freq)
+        risk_result = self.risk_model.compute(portfolio, start, end, freq)
 
         asset_names = list(er_result.per_asset.keys())
         n_assets = len(asset_names)

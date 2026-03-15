@@ -14,16 +14,19 @@
 - `uv build` — build sdist + wheel
 
 ## Architecture
-- `src/waypoint/` — package root; `__init__.py` exposes `__version__` only
-- `src/waypoint/asset_def.py` — `AssetDef` frozen dataclass (name, symbol, vendor, frequency, metadata)
-- `src/waypoint/assets.py` — `Asset` dataclass; `PERIODS_PER_YEAR` constant dict
+- `src/waypoint/` — package root; `__init__.py` exposes the full public API for `import waypoint as wp`
+- `src/waypoint/enums.py` — `Frequency(StrEnum)`, `CashflowMode(StrEnum)`, `PERIODS_PER_YEAR` dict
+- `src/waypoint/asset_def.py` — `AssetDef` frozen dataclass (definition of a return-series instrument)
+- `src/waypoint/indicator_def.py` — `IndicatorDef` frozen dataclass (definition of a level/rate series)
+- `src/waypoint/assets.py` — `Asset` dataclass (holds `pl.DataFrame[date, returns]`)
+- `src/waypoint/indicators.py` — `Indicator` dataclass (holds `pl.DataFrame[date, value]` — raw levels, no pct_change)
 - `src/waypoint/portfolio.py` — `Portfolio` (holds `AssetDef | Asset` per slot + weights; mutable data cache)
 - `src/waypoint/factors.py` — `Factor` (lazy derived return series; inputs + polars transform callable)
-- `src/waypoint/catalog.py` — built-in `AssetDef` constants (SPY, AGG, FRED series, etc.)
+- `src/waypoint/catalog.py` — built-in `AssetDef` and `IndicatorDef` constants (SPY, AGG, DGS10, etc.)
 - `src/waypoint/cashflows.py` — `CashflowDefinition` protocol + `PeriodicCashflow`, `LumpSum`
 - `src/waypoint/constraints.py` — user-friendly constraint objects + cvxpy translation layer
 - `src/waypoint/data/` — fetch API + parquet cache + vendor providers
-  - `data/__init__.py` — exposes `fetch(asset_def, start, end, force_refresh=False)`
+  - `data/__init__.py` — exposes `fetch(instrument, start, end, force_refresh=False)`; returns `Asset` for `AssetDef`, `Indicator` for `IndicatorDef`
   - `data/cache.py` — parquet read/write; cache key = `{vendor}/{symbol}.parquet`
   - `data/normalize.py` — raw prices → `pl.DataFrame[date, returns]` (date column always preserved)
   - `data/providers/base.py` — `Provider` Protocol
@@ -62,6 +65,13 @@
 - **Visualization**: free functions in `analysis/viz.py` (stateless, fully testable); each Result has a `.plot()` method that delegates to the relevant free function as the default view
 - **Optimizer**: uses cvxpy; `constraints.py` owns the translation from user-friendly objects to cvxpy constraints
 - **Visualization library**: plotly (optional extra); matplotlib is not used
+
+## Enums
+- Use `StrEnum` for any field with a fixed set of string values (`Frequency`, `CashflowMode`)
+- All public APIs that take a frequency or mode accept `TheEnum | str` — normalise to the enum via `TheEnum(value)` in `__post_init__` (frozen dataclasses use `object.__setattr__`)
+- `StrEnum` members compare equal to their lowercase string counterparts, so existing `== "daily"` checks keep working
+- `PERIODS_PER_YEAR` in `enums.py` is keyed by `Frequency`; plain-string lookup works due to `StrEnum` hash equality
+- `Indicator` vs `Asset`: use `AssetDef`/`Asset` for return series (pct_change applied); use `IndicatorDef`/`Indicator` for level/rate series (raw values, no pct_change)
 
 ## Conventions
 - Always use decimal returns, never percentages or prices

@@ -4,21 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-# Valid cashflow mode strings
-CASHFLOW_MODE_DOLLAR = "dollar"
-CASHFLOW_MODE_PCT_PORTFOLIO = "pct_portfolio"
-CASHFLOW_MODE_PCT_PORTFOLIO_INFLATION_ADJUSTED = "pct_portfolio_inflation_adjusted"
+from waypoint.enums import CASHFLOW_FREQUENCIES, CashflowMode, Frequency
 
-VALID_CASHFLOW_MODES: frozenset[str] = frozenset({
-    CASHFLOW_MODE_DOLLAR,
-    CASHFLOW_MODE_PCT_PORTFOLIO,
-    CASHFLOW_MODE_PCT_PORTFOLIO_INFLATION_ADJUSTED,
-})
-
-VALID_FREQUENCIES: frozenset[str] = frozenset({"monthly", "annual"})
-
-# Periods per year for cashflow frequencies
-CASHFLOW_PERIODS: dict[str, int] = {"monthly": 12, "annual": 1}
+#: Number of cashflow events per year, keyed by frequency.
+CASHFLOW_PERIODS: dict[Frequency, int] = {
+    Frequency.MONTHLY: 12,
+    Frequency.ANNUAL: 1,
+}
 
 
 @dataclass(frozen=True)
@@ -33,30 +25,30 @@ class PeriodicCashflow:
     amount:
         Base cash flow amount.
     frequency:
-        ``"monthly"`` or ``"annual"``.
+        ``"monthly"`` or ``"annual"``.  Accepts a ``Frequency`` member or
+        its lowercase string equivalent.
     mode:
         ``"dollar"``, ``"pct_portfolio"``, or
-        ``"pct_portfolio_inflation_adjusted"``.
+        ``"pct_portfolio_inflation_adjusted"``.  Accepts a ``CashflowMode``
+        member or its lowercase string equivalent.
     inflation_rate:
         Annual inflation rate (e.g. 0.03 for 3%).  Only used when
-        ``mode == "dollar"`` — dollar amounts grow by this rate each year.
+        ``mode == CashflowMode.DOLLAR`` — dollar amounts grow by this rate
+        each year.
     """
 
     amount: float
-    frequency: str
-    mode: str = field(default=CASHFLOW_MODE_DOLLAR)
+    frequency: Frequency = field(default=Frequency.MONTHLY)
+    mode: CashflowMode = field(default=CashflowMode.DOLLAR)
     inflation_rate: float = field(default=0.0)
 
     def __post_init__(self) -> None:
-        if self.frequency not in VALID_FREQUENCIES:
+        object.__setattr__(self, "frequency", Frequency(self.frequency))
+        object.__setattr__(self, "mode", CashflowMode(self.mode))
+        if self.frequency not in CASHFLOW_FREQUENCIES:
             raise ValueError(
-                f"frequency must be one of {sorted(VALID_FREQUENCIES)}, "
+                f"frequency must be one of {sorted(CASHFLOW_FREQUENCIES)}, "
                 f"got {self.frequency!r}"
-            )
-        if self.mode not in VALID_CASHFLOW_MODES:
-            raise ValueError(
-                f"mode must be one of {sorted(VALID_CASHFLOW_MODES)}, "
-                f"got {self.mode!r}"
             )
 
     def amount_at(
@@ -88,11 +80,11 @@ class PeriodicCashflow:
         if period % cashflow_every != 0:
             return 0.0
 
-        if self.mode == CASHFLOW_MODE_DOLLAR:
+        if self.mode == CashflowMode.DOLLAR:
             return self.amount * cumulative_inflation
-        elif self.mode == CASHFLOW_MODE_PCT_PORTFOLIO:
+        elif self.mode == CashflowMode.PCT_PORTFOLIO:
             return self.amount * portfolio_value
-        elif self.mode == CASHFLOW_MODE_PCT_PORTFOLIO_INFLATION_ADJUSTED:
+        elif self.mode == CashflowMode.PCT_PORTFOLIO_INFLATION_ADJUSTED:
             return self.amount * portfolio_value
         return 0.0
 

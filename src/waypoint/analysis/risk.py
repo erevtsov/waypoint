@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from waypoint.portfolio import Portfolio
 
 from waypoint.analysis.methods.risk import RiskMethod
+from waypoint.enums import PERIODS_PER_YEAR, Frequency
 
 
 @dataclass(frozen=True)
@@ -56,7 +57,7 @@ class Risk:
         portfolio: Portfolio,
         start: date | str | None,
         end: date | str | None,
-        periods_per_year: int,
+        frequency: Frequency | str,
     ) -> RiskResult:
         """Compute annualised covariance and volatility for a portfolio.
 
@@ -66,13 +67,15 @@ class Risk:
             Portfolio whose asset returns are used.
         start, end:
             Date range for the historical window.
-        periods_per_year:
-            Number of periods per calendar year for annualisation.
+        frequency:
+            Observation frequency used to annualise the covariance matrix.
+            Accepts a ``Frequency`` member or its lowercase string equivalent.
 
         Returns
         -------
         RiskResult
         """
+        periods_per_year = PERIODS_PER_YEAR[Frequency(frequency)]
         wide = portfolio.get_returns(start, end)
         asset_cols = [c for c in wide.columns if c != "date"]
         returns_only = wide.select(asset_cols)

@@ -58,7 +58,10 @@ def plot_efficient_frontier(result: EfficientFrontierResult) -> go.Figure:
 def plot_wealth_simulation(result: SimulationResult) -> go.Figure:
     """Fan chart showing percentile wealth paths from a simulation.
 
-    Displays p5, p25, p50 (median), p75, and p95 wealth paths.
+    Displays p5, p25, p50 (median), p75, and p95 wealth paths.  When the
+    result was computed with a ``start_date`` the x-axis shows calendar dates;
+    otherwise it shows integer periods.  The y-axis label reflects whether the
+    values are nominal or real (inflation-adjusted).
 
     Parameters
     ----------
@@ -70,14 +73,21 @@ def plot_wealth_simulation(result: SimulationResult) -> go.Figure:
     go.Figure
     """
     df = result.percentile_df
-    periods = df["period"].to_list()
+    use_dates = "date" in df.columns
+    x_values = df["date"].to_list() if use_dates else df["period"].to_list()
+
+    value_label = "Portfolio Value (Real)" if result.is_real else "Portfolio Value (Nominal)"
+    title = (
+        "Wealth Simulation — Percentile Fan Chart"
+        + (" (Real)" if result.is_real else " (Nominal)")
+    )
 
     fig = go.Figure()
 
     # Shaded band: p5–p95
     fig.add_trace(
         go.Scatter(
-            x=periods + periods[::-1],
+            x=x_values + x_values[::-1],
             y=df["p95"].to_list() + df["p5"].to_list()[::-1],
             fill="toself",
             fillcolor="rgba(0, 100, 200, 0.1)",
@@ -90,7 +100,7 @@ def plot_wealth_simulation(result: SimulationResult) -> go.Figure:
     # Shaded band: p25–p75
     fig.add_trace(
         go.Scatter(
-            x=periods + periods[::-1],
+            x=x_values + x_values[::-1],
             y=df["p75"].to_list() + df["p25"].to_list()[::-1],
             fill="toself",
             fillcolor="rgba(0, 100, 200, 0.2)",
@@ -103,7 +113,7 @@ def plot_wealth_simulation(result: SimulationResult) -> go.Figure:
     # Median line
     fig.add_trace(
         go.Scatter(
-            x=periods,
+            x=x_values,
             y=df["p50"].to_list(),
             mode="lines",
             line={"color": "rgb(0, 100, 200)", "width": 2},
@@ -112,9 +122,9 @@ def plot_wealth_simulation(result: SimulationResult) -> go.Figure:
     )
 
     fig.update_layout(
-        title="Wealth Simulation — Percentile Fan Chart",
-        xaxis_title="Period",
-        yaxis_title="Portfolio Value",
+        title=title,
+        xaxis_title="Date" if use_dates else "Period",
+        yaxis_title=value_label,
         legend={"orientation": "h"},
     )
     return fig

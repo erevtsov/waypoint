@@ -60,7 +60,7 @@ def _make_simulation(
         initial_wealth=1_000_000.0,
         n_simulations=n_simulations,
     )
-    return sim.compute(portfolio, start=None, end=None, periods_per_year=PERIODS_PER_YEAR)
+    return sim.compute(portfolio, start=None, end=None, frequency="monthly")
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +168,7 @@ def test_bootstrap_shape() -> None:
         initial_wealth=100.0,
         n_simulations=50,
     )
-    result = sim.compute(portfolio, start=None, end=None, periods_per_year=PERIODS_PER_YEAR)
+    result = sim.compute(portfolio, start=None, end=None, frequency="monthly")
     expected_cols = HORIZON_YEARS * PERIODS_PER_YEAR + 1
     assert result.paths.shape == (50, expected_cols)
 
@@ -181,3 +181,112 @@ def test_simulation_result_is_frozen() -> None:
     result = _make_simulation()
     with pytest.raises((AttributeError, TypeError)):
         result.horizon_years = 99  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# start_date — date x-axis
+# ---------------------------------------------------------------------------
+
+def test_percentile_df_has_date_column_when_start_date_given() -> None:
+    portfolio = _make_portfolio()
+    sim = WealthSimulation(
+        method=MonteCarlo(seed=42),
+        horizon_years=HORIZON_YEARS,
+        initial_wealth=1_000_000.0,
+        n_simulations=N_SIMULATIONS,
+    )
+    result = sim.compute(
+        portfolio, start=None, end=None, frequency="monthly",
+        start_date=date(2025, 1, 1),
+    )
+    assert "date" in result.percentile_df.columns
+    assert result.start_date == date(2025, 1, 1)
+
+
+def test_percentile_df_no_date_column_without_start_date() -> None:
+    result = _make_simulation()
+    assert "date" not in result.percentile_df.columns
+    assert result.start_date is None
+
+
+def test_start_date_first_row_equals_start_date() -> None:
+    start = date(2025, 1, 1)
+    portfolio = _make_portfolio()
+    sim = WealthSimulation(
+        method=MonteCarlo(seed=42),
+        horizon_years=HORIZON_YEARS,
+        initial_wealth=1_000_000.0,
+        n_simulations=N_SIMULATIONS,
+    )
+    result = sim.compute(
+        portfolio, start=None, end=None, frequency="monthly",
+        start_date=start,
+    )
+    assert result.percentile_df["date"][0] == start
+
+
+def test_start_date_accepts_string() -> None:
+    portfolio = _make_portfolio()
+    sim = WealthSimulation(
+        method=MonteCarlo(seed=42),
+        horizon_years=HORIZON_YEARS,
+        initial_wealth=1_000_000.0,
+        n_simulations=N_SIMULATIONS,
+    )
+    result = sim.compute(
+        portfolio, start=None, end=None, frequency="monthly",
+        start_date="2025-01-01",
+    )
+    assert result.start_date == date(2025, 1, 1)
+    assert "date" in result.percentile_df.columns
+
+
+# ---------------------------------------------------------------------------
+# real mode
+# ---------------------------------------------------------------------------
+
+def test_real_mode_reduces_terminal_wealth() -> None:
+    """Real paths must be smaller than nominal when inflation_rate > 0."""
+    portfolio = _make_portfolio()
+    sim = WealthSimulation(
+        method=MonteCarlo(seed=42),
+        horizon_years=HORIZON_YEARS,
+        initial_wealth=1_000_000.0,
+        n_simulations=N_SIMULATIONS,
+        inflation_rate=0.03,
+    )
+    nominal = sim.compute(portfolio, start=None, end=None, frequency="monthly", real=False)
+    real = sim.compute(portfolio, start=None, end=None, frequency="monthly", real=True)
+
+    assert real.summary()["median_terminal"] < nominal.summary()["median_terminal"]
+    assert real.is_real is True
+    assert nominal.is_real is False
+
+
+def test_real_mode_initial_wealth_unchanged() -> None:
+    """Deflation starts at period 1; period-0 wealth must equal initial_wealth."""
+    portfolio = _make_portfolio()
+    sim = WealthSimulation(
+        method=MonteCarlo(seed=42),
+        horizon_years=HORIZON_YEARS,
+        initial_wealth=1_000_000.0,
+        n_simulations=N_SIMULATIONS,
+        inflation_rate=0.03,
+    )
+    result = sim.compute(portfolio, start=None, end=None, frequency="monthly", real=True)
+    np.testing.assert_array_equal(result.paths[:, 0], 1_000_000.0)
+
+
+def test_zero_inflation_real_equals_nominal() -> None:
+    """With inflation_rate=0 real and nominal paths should be identical."""
+    portfolio = _make_portfolio()
+    sim = WealthSimulation(
+        method=MonteCarlo(seed=42),
+        horizon_years=HORIZON_YEARS,
+        initial_wealth=1_000_000.0,
+        n_simulations=N_SIMULATIONS,
+        inflation_rate=0.0,
+    )
+    nominal = sim.compute(portfolio, start=None, end=None, frequency="monthly", real=False)
+    real = sim.compute(portfolio, start=None, end=None, frequency="monthly", real=True)
+    np.testing.assert_array_almost_equal(real.paths, nominal.paths)

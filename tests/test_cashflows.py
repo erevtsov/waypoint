@@ -104,7 +104,7 @@ def test_periodic_cashflow_invalid_frequency() -> None:
 
 
 def test_periodic_cashflow_invalid_mode() -> None:
-    with pytest.raises(ValueError, match="mode"):
+    with pytest.raises(ValueError):
         PeriodicCashflow(amount=100.0, frequency="monthly", mode="absolute")
 
 

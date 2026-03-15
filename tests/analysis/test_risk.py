@@ -94,7 +94,7 @@ def test_risk_covariance_columns_are_asset_names() -> None:
     """Covariance DataFrame columns must be the asset names."""
     portfolio = _two_asset_portfolio()
     risk = Risk(method=SampleCovariance())
-    result = risk.compute(portfolio, start=None, end=None, periods_per_year=252)
+    result = risk.compute(portfolio, start=None, end=None, frequency="daily")
     assert result.covariance.columns == ["Equities", "Bonds"]
 
 
@@ -102,7 +102,7 @@ def test_risk_covariance_shape_matches_assets() -> None:
     """Covariance DataFrame must be square with n_assets rows and columns."""
     portfolio = _two_asset_portfolio()
     risk = Risk(method=SampleCovariance())
-    result = risk.compute(portfolio, start=None, end=None, periods_per_year=252)
+    result = risk.compute(portfolio, start=None, end=None, frequency="daily")
     n = len(portfolio.names)
     assert result.covariance.shape == (n, n)
 
@@ -111,7 +111,7 @@ def test_risk_portfolio_volatility_non_negative() -> None:
     """Portfolio volatility must always be >= 0."""
     portfolio = _two_asset_portfolio()
     risk = Risk(method=SampleCovariance())
-    result = risk.compute(portfolio, start=None, end=None, periods_per_year=252)
+    result = risk.compute(portfolio, start=None, end=None, frequency="daily")
     assert result.portfolio_volatility >= 0.0
 
 
@@ -119,7 +119,7 @@ def test_risk_per_asset_volatility_non_negative() -> None:
     """Per-asset volatilities must all be >= 0."""
     portfolio = _two_asset_portfolio()
     risk = Risk(method=SampleCovariance())
-    result = risk.compute(portfolio, start=None, end=None, periods_per_year=252)
+    result = risk.compute(portfolio, start=None, end=None, frequency="daily")
     for vol in result.volatilities.values():
         assert vol >= 0.0
 
@@ -128,7 +128,7 @@ def test_risk_portfolio_volatility_consistent() -> None:
     """Portfolio volatility = sqrt(w^T Sigma w) must match manual calculation."""
     portfolio = _two_asset_portfolio(w1=0.6, w2=0.4)
     risk = Risk(method=SampleCovariance())
-    result = risk.compute(portfolio, start=None, end=None, periods_per_year=252)
+    result = risk.compute(portfolio, start=None, end=None, frequency="daily")
 
     sigma = result.covariance.to_numpy()
     w = np.array([0.6, 0.4])
@@ -140,7 +140,7 @@ def test_risk_method_name() -> None:
     """method_name should reflect the class name of the method used."""
     portfolio = _two_asset_portfolio()
     risk = Risk(method=SampleCovariance())
-    result = risk.compute(portfolio, start=None, end=None, periods_per_year=252)
+    result = risk.compute(portfolio, start=None, end=None, frequency="daily")
     assert result.method_name == "SampleCovariance"
 
 

@@ -8,12 +8,7 @@ from datetime import date
 import polars as pl
 
 from waypoint.asset_def import AssetDef
-
-PERIODS_PER_YEAR: dict[str, int] = {
-    "daily": 252,
-    "weekly": 52,
-    "monthly": 12,
-}
+from waypoint.enums import ASSET_FREQUENCIES, PERIODS_PER_YEAR, Frequency
 
 
 @dataclass
@@ -30,7 +25,8 @@ class Asset:
         ``pl.DataFrame`` with columns ``"date"`` (``pl.Date``) and
         ``"returns"`` (``pl.Float64``) of decimal periodic returns (0.01 = 1%).
     frequency:
-        Observation frequency: "daily" | "weekly" | "monthly".
+        Observation frequency.  Accepts a ``Frequency`` member or its
+        lowercase string equivalent (e.g. ``"daily"``).
     asset_class:
         Top-level classification (e.g. "Equities").
     sub_asset_class:
@@ -42,12 +38,13 @@ class Asset:
     name: str
     ticker: str
     returns: pl.DataFrame
-    frequency: str
+    frequency: Frequency
     asset_class: str = ""
     sub_asset_class: str = ""
     geography: str = ""
 
     def __post_init__(self) -> None:
+        self.frequency = Frequency(self.frequency)
         cols = self.returns.columns
         if cols != ["date", "returns"]:
             raise TypeError(
@@ -62,11 +59,9 @@ class Asset:
                 f"Asset.returns['returns'] must be a float column, "
                 f"got {self.returns['returns'].dtype}"
             )
-        from waypoint.asset_def import VALID_FREQUENCIES  # avoid circular at module level
-
-        if self.frequency not in VALID_FREQUENCIES:
+        if self.frequency not in ASSET_FREQUENCIES:
             raise ValueError(
-                f"frequency must be one of {sorted(VALID_FREQUENCIES)}, "
+                f"frequency must be one of {sorted(ASSET_FREQUENCIES)}, "
                 f"got {self.frequency!r}"
             )
 

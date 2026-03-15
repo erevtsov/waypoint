@@ -3,6 +3,7 @@
 import pytest
 
 from waypoint.asset_def import AssetDef
+from waypoint.enums import Frequency
 
 
 def test_asset_def_construction() -> None:
@@ -37,7 +38,7 @@ def test_asset_def_invalid_vendor() -> None:
 
 
 def test_asset_def_invalid_frequency() -> None:
-    with pytest.raises(ValueError, match="frequency must be one of"):
+    with pytest.raises(ValueError):
         AssetDef(name="X", symbol="X", vendor="yfinance", frequency="hourly")
 
 
@@ -45,3 +46,15 @@ def test_asset_def_is_frozen() -> None:
     ad = AssetDef(name="X", symbol="X", vendor="yfinance", frequency="daily")
     with pytest.raises(Exception):
         ad.name = "Y"  # type: ignore[misc]
+
+
+def test_asset_def_frequency_normalised_to_enum() -> None:
+    """Passing a str frequency should be normalised to a Frequency member."""
+    ad = AssetDef(name="X", symbol="X", vendor="yfinance", frequency="daily")
+    assert ad.frequency is Frequency.DAILY
+
+
+def test_asset_def_accepts_frequency_enum() -> None:
+    ad = AssetDef(name="X", symbol="X", vendor="yfinance", frequency=Frequency.MONTHLY)
+    assert ad.frequency is Frequency.MONTHLY
+    assert ad.frequency == "monthly"  # StrEnum equality

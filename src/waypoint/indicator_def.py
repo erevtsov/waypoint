@@ -1,4 +1,10 @@
-"""AssetDef: immutable definition of an investable instrument."""
+"""IndicatorDef: definition of a macro / signal time series.
+
+Unlike ``AssetDef``, an ``IndicatorDef`` describes a series that is fetched
+and stored as raw *levels* (e.g. a yield in percent, an index value) rather
+than converted to decimal periodic returns.  Use ``waypoint.data.fetch`` with
+an ``IndicatorDef`` to get back an ``Indicator`` object.
+"""
 
 from __future__ import annotations
 
@@ -8,34 +14,29 @@ from waypoint.enums import ASSET_FREQUENCIES, Frequency
 
 VALID_VENDORS: frozenset[str] = frozenset({"yfinance", "fred", "eodhd"})
 
-# Re-exported for any code that imports VALID_FREQUENCIES from here directly.
-VALID_FREQUENCIES: frozenset[Frequency] = ASSET_FREQUENCIES
-
 
 @dataclass(frozen=True)
-class AssetDef:
-    """Immutable definition of an investable instrument.
-
-    Carries everything needed to fetch, identify, and classify a security.
-    Decouples the user-facing display name from the vendor-native symbol so
-    portfolios can be described in semantic terms ("US Large Cap Equities")
-    while the data layer handles the symbol/vendor detail.
+class IndicatorDef:
+    """Immutable definition of a macro / signal series.
 
     Parameters
     ----------
     name:
-        Human-readable display name. Becomes ``Asset.name`` after fetching.
+        Display name (e.g. "US 10-Year Treasury Yield").
     symbol:
-        Vendor-native ticker or series ID (e.g. "SPY", "DFII10").
+        Vendor-native symbol (e.g. "DGS10").
     vendor:
-        Data provider: ``"yfinance"``, ``"fred"``, or ``"eodhd"``.
+        Data vendor: ``"yfinance"``, ``"fred"``, or ``"eodhd"``.
     frequency:
         Observation frequency.  Accepts a ``Frequency`` member or its
         lowercase string equivalent (e.g. ``"daily"``).
+    unit:
+        Optional description of the value unit (e.g. ``"percent"``).
+        No automatic conversion is applied; purely informational.
     asset_class:
-        Top-level classification (e.g. ``"Equities"``).
+        Top-level classification (e.g. ``"Macro"``).
     sub_asset_class:
-        Second-level classification (e.g. ``"Large Cap"``).
+        Second-level classification (e.g. ``"Real Rates"``).
     geography:
         Geographic scope (e.g. ``"US"``).
     """
@@ -44,6 +45,7 @@ class AssetDef:
     symbol: str
     vendor: str
     frequency: Frequency = field(default=Frequency.DAILY)
+    unit: str = ""
     asset_class: str = ""
     sub_asset_class: str = ""
     geography: str = ""

@@ -7,7 +7,8 @@ import polars as pl
 import pytest
 
 from waypoint.asset_def import AssetDef
-from waypoint.assets import PERIODS_PER_YEAR, Asset
+from waypoint.assets import Asset
+from waypoint.enums import ASSET_FREQUENCIES, PERIODS_PER_YEAR
 
 
 def _make_returns(n: int = 100) -> pl.DataFrame:
@@ -63,14 +64,15 @@ def test_asset_rejects_non_float_returns() -> None:
 
 
 def test_asset_rejects_invalid_frequency() -> None:
-    with pytest.raises(ValueError, match="frequency must be one of"):
+    with pytest.raises(ValueError):
         Asset(name="X", ticker="X", returns=_make_returns(), frequency="hourly")
 
 
 def test_periods_per_year_property() -> None:
-    for freq, expected in PERIODS_PER_YEAR.items():
+    # Only iterate frequencies valid for Asset (ASSET_FREQUENCIES excludes ANNUAL)
+    for freq in ASSET_FREQUENCIES:
         asset = Asset(name="X", ticker="X", returns=_make_returns(), frequency=freq)
-        assert asset.periods_per_year == expected
+        assert asset.periods_per_year == PERIODS_PER_YEAR[freq]
 
 
 def test_from_asset_def() -> None:

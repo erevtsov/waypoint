@@ -77,7 +77,7 @@ def test_expected_return_per_asset_values() -> None:
     portfolio = _make_portfolio()
     method = HistoricalMean()
     er = ExpectedReturn(method=method)
-    result = er.compute(portfolio, start=None, end=None, periods_per_year=252)
+    result = er.compute(portfolio, start=None, end=None, frequency="daily")
 
     wide = portfolio.get_returns()
     for name in ["Equities", "Bonds"]:
@@ -89,7 +89,7 @@ def test_expected_return_portfolio_is_weighted_sum() -> None:
     """Portfolio expected return must equal weighted sum of per-asset values."""
     portfolio = _make_portfolio(w_eq=0.6, w_fi=0.4)
     er = ExpectedReturn(method=HistoricalMean())
-    result = er.compute(portfolio, start=None, end=None, periods_per_year=252)
+    result = er.compute(portfolio, start=None, end=None, frequency="daily")
 
     expected_portfolio = (
         0.6 * result.per_asset["Equities"] + 0.4 * result.per_asset["Bonds"]
@@ -100,7 +100,7 @@ def test_expected_return_portfolio_is_weighted_sum() -> None:
 def test_expected_return_method_name() -> None:
     """method_name should reflect the class name of the method used."""
     er = ExpectedReturn(method=HistoricalMean())
-    result = er.compute(_make_portfolio(), start=None, end=None, periods_per_year=252)
+    result = er.compute(_make_portfolio(), start=None, end=None, frequency="daily")
     assert result.method_name == "HistoricalMean"
 
 
@@ -115,12 +115,12 @@ def test_expected_return_date_filter_respected() -> None:
     """Passing start/end should filter the data used for estimation."""
     portfolio = _make_portfolio()
     er = ExpectedReturn(method=HistoricalMean())
-    full = er.compute(portfolio, start=None, end=None, periods_per_year=252)
+    full = er.compute(portfolio, start=None, end=None, frequency="daily")
     filtered = er.compute(
         portfolio,
         start=date(2020, 1, 10),
         end=date(2020, 2, 10),
-        periods_per_year=252,
+        frequency="daily",
     )
     # Different windows → different means (very likely with random data)
     # We only assert both are finite floats

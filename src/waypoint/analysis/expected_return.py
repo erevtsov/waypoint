@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from waypoint.portfolio import Portfolio
 
 from waypoint.analysis.methods.returns import ReturnMethod
+from waypoint.enums import PERIODS_PER_YEAR, Frequency
 
 
 @dataclass(frozen=True)
@@ -48,7 +49,7 @@ class ExpectedReturn:
         portfolio: Portfolio,
         start: date | str | None,
         end: date | str | None,
-        periods_per_year: int,
+        frequency: Frequency | str,
     ) -> ExpectedReturnResult:
         """Compute annualised expected returns for each asset and the portfolio.
 
@@ -58,13 +59,15 @@ class ExpectedReturn:
             Portfolio whose asset returns are used.
         start, end:
             Date range for the historical window.
-        periods_per_year:
-            Number of periods per calendar year for annualisation.
+        frequency:
+            Observation frequency used to annualise returns.  Accepts a
+            ``Frequency`` member or its lowercase string equivalent.
 
         Returns
         -------
         ExpectedReturnResult
         """
+        periods_per_year = PERIODS_PER_YEAR[Frequency(frequency)]
         wide = portfolio.get_returns(start, end)
         asset_cols = [c for c in wide.columns if c != "date"]
 

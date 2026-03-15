@@ -63,7 +63,7 @@ def test_frontier_has_correct_number_of_columns() -> None:
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
         portfolio, start=None, end=None,
-        periods_per_year=PERIODS_PER_YEAR, n_points=N_POINTS,
+        frequency="daily", n_points=N_POINTS,
     )
     # expected_return + 3 asset columns
     assert set(result.weights.columns) == {"expected_return", "Equities", "Bonds", "Alternatives"}
@@ -74,7 +74,7 @@ def test_frontier_asset_names_match_portfolio() -> None:
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
         portfolio, start=None, end=None,
-        periods_per_year=PERIODS_PER_YEAR, n_points=N_POINTS,
+        frequency="daily", n_points=N_POINTS,
     )
     assert set(result.asset_names) == {"Equities", "Bonds", "Alternatives"}
 
@@ -84,7 +84,7 @@ def test_frontier_risks_are_non_negative() -> None:
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
         portfolio, start=None, end=None,
-        periods_per_year=PERIODS_PER_YEAR, n_points=N_POINTS,
+        frequency="daily", n_points=N_POINTS,
     )
     assert all(r >= 0.0 for r in result.risks.to_list())
 
@@ -95,7 +95,7 @@ def test_frontier_risks_are_non_decreasing() -> None:
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
         portfolio, start=None, end=None,
-        periods_per_year=PERIODS_PER_YEAR, n_points=N_POINTS,
+        frequency="daily", n_points=N_POINTS,
     )
     risks = result.risks.to_list()
     for i in range(1, len(risks)):
@@ -108,7 +108,7 @@ def test_frontier_returns_are_non_decreasing() -> None:
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
         portfolio, start=None, end=None,
-        periods_per_year=PERIODS_PER_YEAR, n_points=N_POINTS,
+        frequency="daily", n_points=N_POINTS,
     )
     returns = result.expected_returns.to_list()
     for i in range(1, len(returns)):
@@ -122,7 +122,7 @@ def test_frontier_weights_sum_to_one() -> None:
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
         portfolio, start=None, end=None,
-        periods_per_year=PERIODS_PER_YEAR, n_points=N_POINTS,
+        frequency="daily", n_points=N_POINTS,
     )
     for row in result.weights.iter_rows(named=True):
         weight_sum = sum(row[name] for name in result.asset_names)
@@ -135,7 +135,7 @@ def test_frontier_weights_non_negative_with_long_only() -> None:
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
         portfolio, start=None, end=None,
-        periods_per_year=PERIODS_PER_YEAR, n_points=N_POINTS,
+        frequency="daily", n_points=N_POINTS,
     )
     for row in result.weights.iter_rows(named=True):
         for name in result.asset_names:
@@ -151,7 +151,7 @@ def test_optimal_sharpe_returns_valid_weights() -> None:
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
         portfolio, start=None, end=None,
-        periods_per_year=PERIODS_PER_YEAR, n_points=N_POINTS,
+        frequency="daily", n_points=N_POINTS,
     )
     sharpe_weights = result.optimal_sharpe(risk_free_rate=0.02)
     assert set(sharpe_weights.keys()) == set(result.asset_names)
@@ -164,7 +164,7 @@ def test_optimal_sharpe_weights_are_floats() -> None:
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
         portfolio, start=None, end=None,
-        periods_per_year=PERIODS_PER_YEAR, n_points=N_POINTS,
+        frequency="daily", n_points=N_POINTS,
     )
     sharpe_weights = result.optimal_sharpe()
     for v in sharpe_weights.values():
