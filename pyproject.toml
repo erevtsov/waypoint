@@ -23,6 +23,7 @@ classifiers = [
 dependencies = [
     "numpy>=1.26",
     "polars>=1.0",
+    "pyarrow>=14.0",
     "python-dotenv>=1.0",
     "scipy>=1.13",
 ]
@@ -42,8 +43,12 @@ lint = [
 typecheck = [
     "mypy>=1.10",
 ]
+notebook = [
+    "ipykernel>=6.0",
+    "jupyter>=1.0",
+]
 dev = [
-    "waypoint[data,test,lint,typecheck]",
+    "waypoint[data,test,lint,typecheck,notebook]",
 ]
 
 [tool.hatch.build.targets.wheel]
