@@ -6,7 +6,7 @@ Cache layout::
 
 Each file stores the full history for a (vendor, symbol) pair as a sorted
 DataFrame with columns ``"date"`` and ``"close"``.  The vendor is part of
-the key so switching ``Instrument.vendor`` always starts with a clean cache.
+the key so switching ``AssetDef.vendor`` always starts with a clean cache.
 
 Staleness rule: date-gap only.  The cache is only re-fetched if the requested
 date range extends beyond what is already stored.  Historical prices do not

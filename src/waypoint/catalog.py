@@ -1,7 +1,7 @@
-"""Built-in instrument catalog.
+"""Built-in asset definition catalog.
 
-Pre-defined ``Instrument`` constants for commonly used assets. Import these
-directly instead of constructing ``Instrument`` objects from scratch.
+Pre-defined ``AssetDef`` constants for commonly used assets. Import these
+directly instead of constructing ``AssetDef`` objects from scratch.
 
 Usage::
 
@@ -10,21 +10,21 @@ Usage::
 
     spy = fetch(US_LARGE_CAP, start="2020-01-01", end="2024-12-31")
 
-Custom instruments can be defined alongside catalog entries::
+Custom asset definitions can be defined alongside catalog entries::
 
-    from waypoint.instruments import Instrument
+    from waypoint.asset_def import AssetDef
 
-    MY_FUND = Instrument("My Alt Fund", symbol="XYZ", vendor="eodhd",
-                         frequency="daily", asset_class="Alternatives",
-                         geography="Global")
+    MY_FUND = AssetDef("My Alt Fund", symbol="XYZ", vendor="eodhd",
+                       frequency="daily", asset_class="Alternatives",
+                       geography="Global")
 """
 
-from waypoint.instruments import Instrument
+from waypoint.asset_def import AssetDef
 
 # ---------------------------------------------------------------------------
 # Equities
 # ---------------------------------------------------------------------------
-US_LARGE_CAP = Instrument(
+US_LARGE_CAP = AssetDef(
     name="US Large Cap Equities",
     symbol="^SPX",
     vendor="yfinance",
@@ -34,7 +34,7 @@ US_LARGE_CAP = Instrument(
     geography="US",
 )
 
-US_SMALL_CAP = Instrument(
+US_SMALL_CAP = AssetDef(
     name="US Small Cap Equities",
     symbol="^RUT",
     vendor="yfinance",
@@ -44,7 +44,7 @@ US_SMALL_CAP = Instrument(
     geography="US",
 )
 
-INTL_DEVELOPED = Instrument(
+INTL_DEVELOPED = AssetDef(
     name="Intl Developed Equities",
     symbol="EFA",
     vendor="yfinance",
@@ -54,7 +54,7 @@ INTL_DEVELOPED = Instrument(
     geography="International",
 )
 
-EMERGING = Instrument(
+EMERGING = AssetDef(
     name="Emerging Markets",
     symbol="EEM",
     vendor="yfinance",
@@ -67,7 +67,7 @@ EMERGING = Instrument(
 # ---------------------------------------------------------------------------
 # Fixed income
 # ---------------------------------------------------------------------------
-US_AGG_BONDS = Instrument(
+US_AGG_BONDS = AssetDef(
     name="US Aggregate Bonds",
     symbol="AGG",
     vendor="yfinance",
@@ -77,7 +77,7 @@ US_AGG_BONDS = Instrument(
     geography="US",
 )
 
-US_TIPS = Instrument(
+US_TIPS = AssetDef(
     name="US TIPS",
     symbol="TIP",
     vendor="yfinance",
@@ -90,7 +90,7 @@ US_TIPS = Instrument(
 # ---------------------------------------------------------------------------
 # Macro / FRED
 # ---------------------------------------------------------------------------
-REAL_RATE_10Y = Instrument(
+REAL_RATE_10Y = AssetDef(
     name="10Y Real Rate",
     symbol="DFII10",
     vendor="fred",
@@ -100,7 +100,7 @@ REAL_RATE_10Y = Instrument(
     geography="US",
 )
 
-CPI_YOY = Instrument(
+CPI_YOY = AssetDef(
     name="CPI YoY",
     symbol="CPIAUCSL",
     vendor="fred",

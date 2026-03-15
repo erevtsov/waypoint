@@ -6,8 +6,8 @@ import numpy as np
 import polars as pl
 import pytest
 
+from waypoint.asset_def import AssetDef
 from waypoint.assets import PERIODS_PER_YEAR, Asset
-from waypoint.instruments import Instrument
 
 
 def _make_returns(n: int = 100) -> pl.DataFrame:
@@ -73,8 +73,8 @@ def test_periods_per_year_property() -> None:
         assert asset.periods_per_year == expected
 
 
-def test_from_instrument() -> None:
-    inst = Instrument(
+def test_from_asset_def() -> None:
+    inst = AssetDef(
         name="Test",
         symbol="TST",
         vendor="yfinance",
@@ -84,7 +84,7 @@ def test_from_instrument() -> None:
         geography="US",
     )
     returns = _make_returns()
-    asset = Asset.from_instrument(inst, returns)
+    asset = Asset.from_asset_def(inst, returns)
 
     assert asset.name == inst.name
     assert asset.ticker == inst.symbol

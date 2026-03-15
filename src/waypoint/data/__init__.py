@@ -15,17 +15,17 @@ from datetime import date
 
 from dotenv import load_dotenv
 
+from waypoint.asset_def import AssetDef
 from waypoint.assets import Asset
 from waypoint.data.cache import load_or_fetch, snap_to_month_boundaries
 from waypoint.data.normalize import to_returns
 from waypoint.data.providers import get_provider
-from waypoint.instruments import Instrument
 
 load_dotenv(override=False)  # shell env vars take precedence over .env
 
 
 def fetch(
-    instrument: Instrument,
+    instrument: AssetDef,
     start: str | date,
     end: str | date,
     *,
@@ -46,7 +46,7 @@ def fetch(
     ----------
     instrument:
         Security definition (from ``waypoint.catalog`` or a custom
-        ``Instrument``).
+        ``AssetDef``).
     start:
         Start date as ``date`` or ISO-8601 string (e.g. ``"2020-01-01"``).
     end:
@@ -59,7 +59,7 @@ def fetch(
     -------
     Asset
         Asset whose ``name``, ``ticker``, and metadata mirror *instrument*.
-        ``returns`` is a ``pl.Series`` of decimal periodic returns.
+        ``returns`` is a ``pl.DataFrame`` with columns ``"date"`` and ``"returns"``.
     """
     start_dt = date.fromisoformat(start) if isinstance(start, str) else start
     end_dt = date.fromisoformat(end) if isinstance(end, str) else end
@@ -78,7 +78,7 @@ def fetch(
     )
 
     returns = to_returns(raw_df)
-    return Asset.from_instrument(instrument, returns)
+    return Asset.from_asset_def(instrument, returns)
 
 
 __all__ = ["fetch"]

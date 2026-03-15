@@ -1,4 +1,4 @@
-"""Instrument: a named, vendor-sourced security definition."""
+"""AssetDef: a named, vendor-sourced security definition."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ VALID_FREQUENCIES: frozenset[str] = frozenset({"daily", "weekly", "monthly"})
 
 
 @dataclass(frozen=True)
-class Instrument:
+class AssetDef:
     """A named, vendor-sourced security definition.
 
     Carries everything needed to fetch, identify, and classify a security.

@@ -1,10 +1,10 @@
-"""Tests for the built-in instrument catalog."""
+"""Tests for the built-in asset definition catalog."""
 
 from waypoint import catalog
-from waypoint.instruments import Instrument
+from waypoint.asset_def import AssetDef
 
 
-def test_all_catalog_entries_are_instruments() -> None:
+def test_all_catalog_entries_are_asset_defs() -> None:
     entries = [
         catalog.US_LARGE_CAP,
         catalog.US_SMALL_CAP,
@@ -16,7 +16,7 @@ def test_all_catalog_entries_are_instruments() -> None:
         catalog.CPI_YOY,
     ]
     for entry in entries:
-        assert isinstance(entry, Instrument)
+        assert isinstance(entry, AssetDef)
 
 
 def test_catalog_entries_have_non_empty_metadata() -> None:
@@ -40,6 +40,6 @@ def test_cpi_is_monthly() -> None:
     assert catalog.CPI_YOY.frequency == "monthly"
 
 
-def test_equity_instruments_are_daily() -> None:
-    for inst in [catalog.US_LARGE_CAP, catalog.US_SMALL_CAP, catalog.INTL_DEVELOPED]:
-        assert inst.frequency == "daily"
+def test_equity_asset_defs_are_daily() -> None:
+    for ad in [catalog.US_LARGE_CAP, catalog.US_SMALL_CAP, catalog.INTL_DEVELOPED]:
+        assert ad.frequency == "daily"

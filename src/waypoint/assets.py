@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import polars as pl
 
-from waypoint.instruments import Instrument
+from waypoint.asset_def import AssetDef
 
 PERIODS_PER_YEAR: dict[str, int] = {
     "daily": 252,
@@ -26,8 +26,8 @@ class Asset:
     ticker:
         Vendor-native symbol (e.g. "SPY").
     returns:
-        Date-indexed ``pl.Series`` of decimal periodic returns (0.01 = 1%).
-        Must have dtype ``pl.Date`` as its index column name ``"date"``.
+        ``pl.DataFrame`` with columns ``"date"`` (``pl.Date``) and
+        ``"returns"`` (``pl.Float64``) of decimal periodic returns (0.01 = 1%).
     frequency:
         Observation frequency: "daily" | "weekly" | "monthly".
     asset_class:
@@ -61,7 +61,7 @@ class Asset:
                 f"Asset.returns['returns'] must be a float column, "
                 f"got {self.returns['returns'].dtype}"
             )
-        from waypoint.instruments import VALID_FREQUENCIES  # avoid circular at module level
+        from waypoint.asset_def import VALID_FREQUENCIES  # avoid circular at module level
 
         if self.frequency not in VALID_FREQUENCIES:
             raise ValueError(
@@ -75,18 +75,18 @@ class Asset:
         return PERIODS_PER_YEAR[self.frequency]
 
     @classmethod
-    def from_instrument(cls, instrument: Instrument, returns: pl.DataFrame) -> Asset:
-        """Construct an Asset from an ``Instrument`` and a return series.
+    def from_asset_def(cls, asset_def: AssetDef, returns: pl.DataFrame) -> Asset:
+        """Construct an Asset from an ``AssetDef`` and a return DataFrame.
 
-        Copies all metadata fields from the instrument so they flow through
-        to portfolio construction and downstream analysis.
+        Copies all metadata fields from the asset definition so they flow
+        through to portfolio construction and downstream analysis.
         """
         return cls(
-            name=instrument.name,
-            ticker=instrument.symbol,
+            name=asset_def.name,
+            ticker=asset_def.symbol,
             returns=returns,
-            frequency=instrument.frequency,
-            asset_class=instrument.asset_class,
-            sub_asset_class=instrument.sub_asset_class,
-            geography=instrument.geography,
+            frequency=asset_def.frequency,
+            asset_class=asset_def.asset_class,
+            sub_asset_class=asset_def.sub_asset_class,
+            geography=asset_def.geography,
         )
