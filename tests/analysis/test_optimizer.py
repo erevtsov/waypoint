@@ -10,7 +10,7 @@ import polars as pl
 from waypoint.analysis.expected_return import ExpectedReturn
 from waypoint.analysis.methods.returns import HistoricalMean
 from waypoint.analysis.methods.risk import SampleCovariance
-from waypoint.analysis.optimizer import Optimizer
+from waypoint.analysis.optimizer import EfficientFrontierResult, Optimizer
 from waypoint.analysis.risk import Risk
 from waypoint.assets import Asset
 from waypoint.constraints import LongOnly, SumToOne
@@ -169,3 +169,65 @@ def test_optimal_sharpe_weights_are_floats() -> None:
     sharpe_weights = result.optimal_sharpe()
     for v in sharpe_weights.values():
         assert isinstance(v, float)
+
+
+# ---------------------------------------------------------------------------
+# portfolio_at / min_volatility_portfolio / max_sharpe_portfolio
+# ---------------------------------------------------------------------------
+
+def _make_frontier() -> tuple[Portfolio, EfficientFrontierResult]:
+    portfolio = _make_portfolio()
+    optimizer = _make_optimizer()
+    result = optimizer.efficient_frontier(
+        portfolio, start=None, end=None,
+        frequency="daily", n_points=N_POINTS,
+    )
+    return portfolio, result
+
+
+def test_portfolio_at_returns_portfolio_instance() -> None:
+    from waypoint.portfolio import Portfolio as P
+    source, result = _make_frontier()
+    p = result.portfolio_at(source, 0)
+    assert isinstance(p, P)
+
+
+def test_portfolio_at_weights_match_frontier_row() -> None:
+    source, result = _make_frontier()
+    idx = 5
+    p = result.portfolio_at(source, idx)
+    row = result.weights.row(idx, named=True)
+    for name in result.asset_names:
+        assert abs(p.weights[name] - row[name]) < 1e-10
+
+
+def test_portfolio_at_shares_asset_slots() -> None:
+    """portfolio_at must reuse the source assets, not copy them."""
+    source, result = _make_frontier()
+    p = result.portfolio_at(source, 0)
+    for name in result.asset_names:
+        assert p.slots[name] is source.slots[name]
+
+
+def test_min_volatility_portfolio_has_lowest_risk() -> None:
+    source, result = _make_frontier()
+    min_vol_p = result.min_volatility_portfolio(source)
+    # Weights should match row 0 (lowest risk)
+    row0 = result.weights.row(0, named=True)
+    for name in result.asset_names:
+        assert abs(min_vol_p.weights[name] - row0[name]) < 1e-10
+
+
+def test_max_sharpe_portfolio_weights_match_optimal_sharpe() -> None:
+    source, result = _make_frontier()
+    rf = 0.02
+    sharpe_weights = result.optimal_sharpe(risk_free_rate=rf)
+    sharpe_p = result.max_sharpe_portfolio(source, risk_free_rate=rf)
+    for name in result.asset_names:
+        assert abs(sharpe_p.weights[name] - sharpe_weights[name]) < 1e-10
+
+
+def test_max_sharpe_portfolio_weights_sum_to_one() -> None:
+    source, result = _make_frontier()
+    p = result.max_sharpe_portfolio(source)
+    assert abs(sum(p.weights.values()) - 1.0) < 1e-4

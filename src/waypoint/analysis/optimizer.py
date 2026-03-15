@@ -56,6 +56,68 @@ class EfficientFrontierResult:
         dict[str, float]
             Mapping of asset name → weight at the max-Sharpe point.
         """
+        best_idx = self._max_sharpe_idx(risk_free_rate)
+        row = self.weights.row(best_idx, named=True)
+        return {name: float(row[name]) for name in self.asset_names}
+
+    def portfolio_at(self, source: Portfolio, idx: int) -> Portfolio:
+        """Return a ``Portfolio`` for the frontier point at *idx*.
+
+        The new portfolio shares the same asset slots as *source* but uses the
+        optimised weights from the chosen frontier point.
+
+        Parameters
+        ----------
+        source:
+            Portfolio whose asset slots define the investment universe.
+        idx:
+            Zero-based index into the frontier (sorted by risk ascending).
+
+        Returns
+        -------
+        Portfolio
+        """
+        row = self.weights.row(idx, named=True)
+        weights = {name: float(row[name]) for name in self.asset_names}
+        return source.__class__(source.slots, weights=weights, name=source.name)
+
+    def min_volatility_portfolio(self, source: Portfolio) -> Portfolio:
+        """Return the minimum-volatility ``Portfolio`` from the frontier.
+
+        Equivalent to ``portfolio_at(source, 0)`` since the frontier is sorted
+        by risk ascending.
+
+        Parameters
+        ----------
+        source:
+            Portfolio whose asset slots define the investment universe.
+
+        Returns
+        -------
+        Portfolio
+        """
+        return self.portfolio_at(source, 0)
+
+    def max_sharpe_portfolio(
+        self, source: Portfolio, risk_free_rate: float = 0.0
+    ) -> Portfolio:
+        """Return the maximum Sharpe ratio ``Portfolio`` from the frontier.
+
+        Parameters
+        ----------
+        source:
+            Portfolio whose asset slots define the investment universe.
+        risk_free_rate:
+            Annualised risk-free rate used in the Sharpe calculation.
+
+        Returns
+        -------
+        Portfolio
+        """
+        return self.portfolio_at(source, self._max_sharpe_idx(risk_free_rate))
+
+    def _max_sharpe_idx(self, risk_free_rate: float = 0.0) -> int:
+        """Return the index of the max-Sharpe frontier point."""
         returns_list = self.expected_returns.to_list()
         risks_list = self.risks.to_list()
 
@@ -67,9 +129,7 @@ class EfficientFrontierResult:
                 if sharpe > best_sharpe:
                     best_sharpe = sharpe
                     best_idx = i
-
-        row = self.weights.row(best_idx, named=True)
-        return {name: float(row[name]) for name in self.asset_names}
+        return best_idx
 
     def plot(self) -> go.Figure:
         """Plot the efficient frontier as a risk vs return scatter."""
