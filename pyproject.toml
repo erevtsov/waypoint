@@ -21,7 +21,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "cvxpy>=1.5",
     "numpy>=1.26",
+    "plotly>=5.0",
     "polars>=1.0",
     "pyarrow>=14.0",
     "python-dotenv>=1.0",
@@ -79,7 +81,7 @@ mypy_path = "src"
 packages = ["waypoint"]
 
 [[tool.mypy.overrides]]
-module = ["yfinance", "fredapi", "eodhd"]
+module = ["yfinance", "fredapi", "eodhd", "cvxpy", "plotly", "plotly.*"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------

@@ -72,7 +72,7 @@
 - Use `importlib.metadata.version("waypoint")` for `__version__` — never hardcode it
 - Use `np.random.default_rng(seed=42)` for reproducible test data
 - Vendor SDKs (yfinance, fredapi, eodhd) live in optional extras, never in `[project.dependencies]`
-- plotly and cvxpy also live in optional extras
+- plotly and cvxpy are core dependencies (in `[project.dependencies]`)
 - For daily instruments, `fetch()` snaps date range to full calendar months — Asset.returns may cover a wider range than requested
 - Cache key includes vendor: changing `AssetDef.vendor` starts a fresh cache
 - `force_refresh=True` on `fetch()` bypasses cache and overwrites with fresh vendor data

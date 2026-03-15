@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
 import polars as pl
 
@@ -73,6 +74,18 @@ class Asset:
     def periods_per_year(self) -> int:
         """Number of periods per calendar year implied by this asset's frequency."""
         return PERIODS_PER_YEAR[self.frequency]
+
+    def get_returns(self, start: date | str, end: date | str) -> pl.DataFrame:
+        """Return the ``["date", "returns"]`` DataFrame filtered to *[start, end]*.
+
+        Provides a uniform interface with ``AssetDef`` and ``Factor`` so that
+        analytics can accept any of the three without special-casing.
+        """
+        start_dt = date.fromisoformat(start) if isinstance(start, str) else start
+        end_dt = date.fromisoformat(end) if isinstance(end, str) else end
+        return self.returns.filter(
+            (pl.col("date") >= start_dt) & (pl.col("date") <= end_dt)
+        )
 
     @classmethod
     def from_asset_def(cls, asset_def: AssetDef, returns: pl.DataFrame) -> Asset:
