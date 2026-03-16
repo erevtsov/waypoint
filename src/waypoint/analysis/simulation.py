@@ -32,6 +32,14 @@ class SimulationResult:
     percentile_df:
         ``pl.DataFrame`` with columns ``["period", "p5", "p25", "p50", "p75", "p95"]``
         plus an optional ``"date"`` column when ``start_date`` was provided.
+    weights:
+        Portfolio weights used in the simulation — also the constant % allocation
+        to each asset (constant-rebalancing assumption).
+    allocation_dollar:
+        Per-asset dollar allocations. Each value is a ``pl.DataFrame`` with the
+        same structure as ``percentile_df`` (``period``, ``p5``–``p95``, optional
+        ``date``) representing the dollar value held in that asset at each
+        percentile of the portfolio wealth distribution.
     initial_wealth:
         Starting portfolio value.
     horizon_years:
@@ -44,6 +52,8 @@ class SimulationResult:
 
     paths: np.ndarray
     percentile_df: pl.DataFrame
+    weights: dict[str, float]
+    allocation_dollar: dict[str, pl.DataFrame]
     initial_wealth: float
     horizon_years: int
     start_date: date | None = None
@@ -178,9 +188,20 @@ class WealthSimulation:
 
         percentile_df = self._compute_percentiles(paths, parsed_start, periods_per_year)
 
+        weights = portfolio.weights
+        pct_cols = ["p5", "p25", "p50", "p75", "p95"]
+        allocation_dollar: dict[str, pl.DataFrame] = {
+            name: percentile_df.with_columns(
+                [pl.col(c) * w for c in pct_cols]
+            )
+            for name, w in weights.items()
+        }
+
         return SimulationResult(
             paths=paths,
             percentile_df=percentile_df,
+            weights=weights,
+            allocation_dollar=allocation_dollar,
             initial_wealth=self.initial_wealth,
             horizon_years=self.horizon_years,
             start_date=parsed_start,

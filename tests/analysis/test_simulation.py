@@ -184,6 +184,66 @@ def test_simulation_result_is_frozen() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Per-asset allocation
+# ---------------------------------------------------------------------------
+
+def test_allocation_dollar_keys_match_portfolio() -> None:
+    """allocation_dollar must have one entry per portfolio slot."""
+    result = _make_simulation()
+    assert set(result.allocation_dollar.keys()) == {"Equities", "Bonds"}
+
+
+def test_allocation_dollar_sums_to_portfolio_percentile() -> None:
+    """Dollar allocations across all assets must sum to the portfolio percentile_df."""
+    result = _make_simulation()
+    pct_cols = ["p5", "p25", "p50", "p75", "p95"]
+    total = sum(result.allocation_dollar[n].select(pct_cols) for n in result.allocation_dollar)
+    for col in pct_cols:
+        np.testing.assert_allclose(
+            total[col].to_numpy(),
+            result.percentile_df[col].to_numpy(),
+            rtol=1e-10,
+        )
+
+
+def test_allocation_dollar_scaled_by_weight() -> None:
+    """Each asset's allocation must equal its weight times the portfolio percentile."""
+    result = _make_simulation()
+    pct_cols = ["p5", "p25", "p50", "p75", "p95"]
+    for name, w in result.weights.items():
+        for col in pct_cols:
+            np.testing.assert_allclose(
+                result.allocation_dollar[name][col].to_numpy(),
+                result.percentile_df[col].to_numpy() * w,
+                rtol=1e-10,
+            )
+
+
+def test_weights_match_portfolio() -> None:
+    """result.weights must equal the portfolio weights used to construct it."""
+    result = _make_simulation()
+    assert abs(result.weights["Equities"] - 0.6) < 1e-10
+    assert abs(result.weights["Bonds"] - 0.4) < 1e-10
+
+
+def test_allocation_dollar_has_same_date_column_as_percentile_df() -> None:
+    """When start_date is given, allocation_dollar DFs must also have a date column."""
+    portfolio = _make_portfolio()
+    sim = WealthSimulation(
+        method=MonteCarlo(seed=42),
+        horizon_years=HORIZON_YEARS,
+        initial_wealth=1_000_000.0,
+        n_simulations=N_SIMULATIONS,
+    )
+    result = sim.compute(
+        portfolio, start=None, end=None, frequency="daily",
+        start_date=date(2025, 1, 1),
+    )
+    for df in result.allocation_dollar.values():
+        assert "date" in df.columns
+
+
+# ---------------------------------------------------------------------------
 # start_date — date x-axis
 # ---------------------------------------------------------------------------
 
