@@ -35,16 +35,25 @@ class PeriodicCashflow:
         Annual inflation rate (e.g. 0.03 for 3%).  Only used when
         ``mode == CashflowMode.DOLLAR`` — dollar amounts grow by this rate
         each year.
+    slots:
+        Portfolio slot names that receive this cash flow.  ``None`` (default)
+        means all slots receive the cash flow proportionally.  Use this to
+        restrict contributions or withdrawals to liquid assets only — e.g.
+        ``slots=("Equities", "Bonds")`` keeps the cash flow out of a real
+        estate slot that cannot be incrementally purchased.
     """
 
     amount: float
     frequency: Frequency = field(default=Frequency.MONTHLY)
     mode: CashflowMode = field(default=CashflowMode.DOLLAR)
     inflation_rate: float = field(default=0.0)
+    slots: tuple[str, ...] | None = field(default=None)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "frequency", Frequency(self.frequency))
         object.__setattr__(self, "mode", CashflowMode(self.mode))
+        if isinstance(self.slots, list):
+            object.__setattr__(self, "slots", tuple(self.slots))
         if self.frequency not in CASHFLOW_FREQUENCIES:
             raise ValueError(
                 f"frequency must be one of {sorted(CASHFLOW_FREQUENCIES)}, "
@@ -109,10 +118,18 @@ class LumpSum:
         Cash flow amount.
     at_year:
         Year at which the cash flow occurs (e.g. 5.0 = end of year 5).
+    slots:
+        Portfolio slot names that receive this cash flow.  ``None`` (default)
+        means all slots receive the cash flow proportionally.
     """
 
     amount: float
     at_year: float
+    slots: tuple[str, ...] | None = field(default=None)
+
+    def __post_init__(self) -> None:
+        if isinstance(self.slots, list):
+            object.__setattr__(self, "slots", tuple(self.slots))
 
     def amount_at(
         self,

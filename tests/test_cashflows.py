@@ -173,3 +173,37 @@ def test_lump_sum_is_frozen() -> None:
     cf = LumpSum(amount=1000.0, at_year=1.0)
     with pytest.raises((AttributeError, TypeError)):
         cf.amount = 2000.0  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# slots field
+# ---------------------------------------------------------------------------
+
+def test_periodic_cashflow_slots_default_none() -> None:
+    """slots defaults to None (all assets receive the cashflow)."""
+    cf = PeriodicCashflow(amount=1000.0, frequency="monthly")
+    assert cf.slots is None
+
+
+def test_periodic_cashflow_slots_tuple_stored() -> None:
+    """Tuple of slot names is stored as-is."""
+    cf = PeriodicCashflow(amount=500.0, frequency="monthly", slots=("A", "B"))
+    assert cf.slots == ("A", "B")
+
+
+def test_periodic_cashflow_slots_list_coerced_to_tuple() -> None:
+    """A list passed as slots is coerced to tuple."""
+    cf = PeriodicCashflow(amount=500.0, frequency="monthly", slots=["A", "B"])  # type: ignore[arg-type]
+    assert isinstance(cf.slots, tuple)
+    assert cf.slots == ("A", "B")
+
+
+def test_lump_sum_slots_default_none() -> None:
+    cf = LumpSum(amount=10_000.0, at_year=5.0)
+    assert cf.slots is None
+
+
+def test_lump_sum_slots_list_coerced_to_tuple() -> None:
+    cf = LumpSum(amount=10_000.0, at_year=5.0, slots=["X"])  # type: ignore[arg-type]
+    assert isinstance(cf.slots, tuple)
+    assert cf.slots == ("X",)

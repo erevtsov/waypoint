@@ -131,6 +131,50 @@ def plot_wealth_simulation(result: SimulationResult) -> go.Figure:
     return fig
 
 
+def plot_allocation_dollar(result: SimulationResult) -> go.Figure:
+    """Stacked area chart of median per-asset dollar values over time.
+
+    Each asset is rendered as a filled band stacked on the previous one,
+    so the total height equals the sum of per-asset medians.  The x-axis
+    shows calendar dates when the result was computed with a ``start_date``,
+    otherwise integer periods.
+
+    Parameters
+    ----------
+    result:
+        A ``SimulationResult`` from ``WealthSimulation.compute``.
+
+    Returns
+    -------
+    go.Figure
+    """
+    use_dates = "date" in result.percentile_df.columns
+    value_label = "Asset Value (Real)" if result.is_real else "Asset Value (Nominal)"
+    title = "Asset Allocation — Median $ Values" + (" (Real)" if result.is_real else " (Nominal)")
+
+    fig = go.Figure()
+    for name, df in result.allocation_dollar.items():
+        x_values = df["date"].to_list() if use_dates else df["period"].to_list()
+        fig.add_trace(
+            go.Scatter(
+                x=x_values,
+                y=df["p50"].to_list(),
+                mode="lines",
+                stackgroup="one",
+                name=name,
+                hovertemplate="%{fullData.name}: %{y:$,.0f}<extra></extra>",
+            )
+        )
+
+    fig.update_layout(
+        title=title,
+        xaxis_title="Date" if use_dates else "Period",
+        yaxis_title=value_label,
+        legend={"orientation": "h"},
+    )
+    return fig
+
+
 # Distinct colours for up to 6 scenarios; repeated thereafter via modulo.
 _SCENARIO_COLORS = [
     (0, 100, 200),

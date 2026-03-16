@@ -193,34 +193,25 @@ def test_allocation_dollar_keys_match_portfolio() -> None:
     assert set(result.allocation_dollar.keys()) == {"Equities", "Bonds"}
 
 
-def test_allocation_dollar_sums_to_portfolio_percentile() -> None:
-    """Dollar allocations across all assets must sum to the portfolio percentile_df."""
+def test_allocation_dollar_period_0_equals_initial_values() -> None:
+    """At t=0 all simulations start at initial_wealth × weight; all percentiles equal that value."""
     result = _make_simulation()
-    pct_cols = ["p5", "p25", "p50", "p75", "p95"]
-    total = sum(result.allocation_dollar[n].select(pct_cols) for n in result.allocation_dollar)
-    for col in pct_cols:
-        np.testing.assert_allclose(
-            total[col].to_numpy(),
-            result.percentile_df[col].to_numpy(),
-            rtol=1e-10,
-        )
-
-
-def test_allocation_dollar_scaled_by_weight() -> None:
-    """Each asset's allocation must equal its weight times the portfolio percentile."""
-    result = _make_simulation()
-    pct_cols = ["p5", "p25", "p50", "p75", "p95"]
     for name, w in result.weights.items():
-        for col in pct_cols:
-            np.testing.assert_allclose(
-                result.allocation_dollar[name][col].to_numpy(),
-                result.percentile_df[col].to_numpy() * w,
-                rtol=1e-10,
-            )
+        expected = 1_000_000.0 * w
+        # All sims identical at t=0 so every percentile equals expected
+        for col in ["p5", "p25", "p50", "p75", "p95"]:
+            assert abs(result.allocation_dollar[name][col][0] - expected) < 1e-6
+
+
+def test_allocation_dollar_period_0_sums_to_initial_wealth() -> None:
+    """Sum of per-asset values at t=0 must equal initial_wealth."""
+    result = _make_simulation()
+    total_at_0 = sum(result.allocation_dollar[n]["p50"][0] for n in result.allocation_dollar)
+    assert abs(total_at_0 - 1_000_000.0) < 1e-6
 
 
 def test_weights_match_portfolio() -> None:
-    """result.weights must equal the portfolio weights used to construct it."""
+    """result.weights must equal the initial portfolio weights."""
     result = _make_simulation()
     assert abs(result.weights["Equities"] - 0.6) < 1e-10
     assert abs(result.weights["Bonds"] - 0.4) < 1e-10
@@ -241,6 +232,82 @@ def test_allocation_dollar_has_same_date_column_as_percentile_df() -> None:
     )
     for df in result.allocation_dollar.values():
         assert "date" in df.columns
+
+
+# ---------------------------------------------------------------------------
+# Cashflow routing via slots
+# ---------------------------------------------------------------------------
+
+def _make_zero_return_asset(name: str, ticker: str, n: int = 200) -> Asset:
+    """Asset with exactly zero returns every period."""
+    dates = [date(2010, 1, 1) + timedelta(days=i) for i in range(n)]
+    returns = pl.DataFrame({"date": dates, "returns": [0.0] * n})
+    return Asset(name=name, ticker=ticker, returns=returns, frequency="daily")
+
+
+def test_cashflow_routing_does_not_affect_excluded_slot() -> None:
+    """A slot excluded from cashflow slots must not receive any cashflow."""
+    a = _make_zero_return_asset("A", "A")
+    b = _make_zero_return_asset("B", "B")
+    portfolio = Portfolio({"A": a, "B": b}, weights={"A": 0.5, "B": 0.5})
+
+    # Cashflow targets only slot A
+    cf = PeriodicCashflow(amount=1_000.0, frequency="monthly", mode="dollar", slots=("A",))
+    sim = WealthSimulation(
+        method=Bootstrap(historical_returns=np.zeros(200), block_size=5, seed=42),
+        cashflows=[cf],
+        horizon_years=1,
+        initial_wealth=100_000.0,
+        n_simulations=50,
+    )
+    result = sim.compute(portfolio, start=None, end=None, frequency="monthly")
+
+    b_initial = 100_000.0 * 0.5
+    # B has zero returns and receives no cashflows — its value must stay constant
+    for col in ["p5", "p25", "p50", "p75", "p95"]:
+        np.testing.assert_allclose(
+            result.allocation_dollar["B"][col].to_numpy(),
+            b_initial,
+            atol=1e-6,
+        )
+
+
+def test_cashflow_routing_targets_correct_slot() -> None:
+    """A slot that IS the cashflow target must grow beyond its initial value."""
+    a = _make_zero_return_asset("A", "A")
+    b = _make_zero_return_asset("B", "B")
+    portfolio = Portfolio({"A": a, "B": b}, weights={"A": 0.5, "B": 0.5})
+
+    cf = PeriodicCashflow(amount=1_000.0, frequency="monthly", mode="dollar", slots=("A",))
+    sim = WealthSimulation(
+        method=Bootstrap(historical_returns=np.zeros(200), block_size=5, seed=42),
+        cashflows=[cf],
+        horizon_years=1,
+        initial_wealth=100_000.0,
+        n_simulations=50,
+    )
+    result = sim.compute(portfolio, start=None, end=None, frequency="monthly")
+
+    a_initial = 100_000.0 * 0.5
+    # A must have grown by accumulated cashflows
+    assert result.allocation_dollar["A"]["p50"][-1] > a_initial
+
+
+def test_cashflow_routing_invalid_slot_raises() -> None:
+    """Specifying a slot not in the portfolio must raise ValueError."""
+    a = _make_zero_return_asset("A", "A")
+    portfolio = Portfolio({"A": a}, weights={"A": 1.0})
+
+    cf = PeriodicCashflow(amount=1_000.0, frequency="monthly", mode="dollar", slots=("Z",))
+    sim = WealthSimulation(
+        method=Bootstrap(historical_returns=np.zeros(200), block_size=5, seed=42),
+        cashflows=[cf],
+        horizon_years=1,
+        initial_wealth=100_000.0,
+        n_simulations=10,
+    )
+    with pytest.raises(ValueError, match="Z"):
+        sim.compute(portfolio, start=None, end=None, frequency="monthly")
 
 
 # ---------------------------------------------------------------------------

@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 from waypoint.analysis.expected_return import ExpectedReturn
 from waypoint.analysis.methods.simulation import SimulationMethod
 from waypoint.analysis.risk import Risk
-from waypoint.cashflows import CashflowDefinition
-from waypoint.enums import PERIODS_PER_YEAR, Frequency
+from waypoint.cashflows import CashflowDefinition, PeriodicCashflow
+from waypoint.enums import PERIODS_PER_YEAR, CashflowMode, Frequency
 
 
 @dataclass(frozen=True)
@@ -27,19 +27,20 @@ class SimulationResult:
     Attributes
     ----------
     paths:
-        (n_simulations, n_periods + 1) array of portfolio values.
+        (n_simulations, n_periods + 1) array of total portfolio values.
         Column 0 is the initial wealth; column t is the value after period t.
     percentile_df:
         ``pl.DataFrame`` with columns ``["period", "p5", "p25", "p50", "p75", "p95"]``
         plus an optional ``"date"`` column when ``start_date`` was provided.
     weights:
-        Portfolio weights used in the simulation — also the constant % allocation
-        to each asset (constant-rebalancing assumption).
+        Initial portfolio weights.  Under the buy-and-hold simulation model
+        these are only the *starting* allocation — asset values drift over time
+        as their returns diverge and cashflow routing may differ across slots.
     allocation_dollar:
-        Per-asset dollar allocations. Each value is a ``pl.DataFrame`` with the
-        same structure as ``percentile_df`` (``period``, ``p5``–``p95``, optional
-        ``date``) representing the dollar value held in that asset at each
-        percentile of the portfolio wealth distribution.
+        Per-asset dollar allocations derived from the simulation.  Each value
+        is a ``pl.DataFrame`` with the same structure as ``percentile_df``
+        (``period``, ``p5``–``p95``, optional ``date``) representing the
+        percentile distribution of that asset's value path.
     initial_wealth:
         Starting portfolio value.
     horizon_years:
@@ -80,10 +81,21 @@ class SimulationResult:
 
         return plot_wealth_simulation(self)
 
+    def plot_allocation(self) -> go.Figure:
+        """Stacked area chart of median per-asset dollar values over time."""
+        from waypoint.analysis.viz import plot_allocation_dollar
+
+        return plot_allocation_dollar(self)
+
 
 @dataclass
 class WealthSimulation:
     """Simulates long-horizon portfolio wealth under a given return model.
+
+    Each asset is simulated independently using its own return path (buy-and-hold,
+    no rebalancing).  Cashflows can be routed to specific slots via each
+    cashflow's ``slots`` field; ``slots=None`` distributes to all assets
+    proportionally by their current values.
 
     Parameters
     ----------
@@ -119,11 +131,9 @@ class WealthSimulation:
     ) -> SimulationResult:
         """Run the wealth simulation.
 
-        Estimates portfolio return and volatility from historical data, then
-        simulates ``n_simulations`` paths of
-        ``horizon_years * PERIODS_PER_YEAR[frequency]`` periods.  At each
-        period, the portfolio grows by the simulated return and then cash flows
-        are applied.
+        Simulates per-asset return paths using the full covariance structure,
+        then applies cashflows routed to each cashflow's ``slots``.  Asset
+        values are never rebalanced — weights drift as returns diverge.
 
         Parameters
         ----------
@@ -132,12 +142,11 @@ class WealthSimulation:
         start, end:
             Historical date range used to estimate parameters.
         frequency:
-            Observation frequency of the portfolio returns.  Determines the
-            number of simulation steps per year.  Accepts a ``Frequency``
-            member or its lowercase string equivalent.
+            Observation frequency of the portfolio returns.
         start_date:
             Calendar date of period 0 (today).  When provided, the
-            ``percentile_df`` gains a ``"date"`` column for the x-axis.
+            ``percentile_df`` and ``allocation_dollar`` DFs gain a ``"date"``
+            column.
         real:
             When ``True``, deflate paths to real (inflation-adjusted) terms
             using ``self.inflation_rate``.
@@ -149,8 +158,13 @@ class WealthSimulation:
         freq = Frequency(frequency)
         periods_per_year = PERIODS_PER_YEAR[freq]
 
-        # Estimate annualised mu and sigma via portfolio's configured methods,
-        # then convert to per-period quantities for the simulation engine.
+        asset_names = portfolio.names
+        n_assets = len(asset_names)
+        weights = portfolio.weights
+        initial_values = np.array([weights[n] * self.initial_wealth for n in asset_names])
+
+        # Estimate per-asset annualised mu vector and covariance matrix,
+        # then scale down to per-period quantities for the simulation engine.
         er_result = ExpectedReturn(method=portfolio.expected_return_method).compute(
             portfolio, start, end, frequency=freq
         )
@@ -158,27 +172,38 @@ class WealthSimulation:
             portfolio, start, end, frequency=freq
         )
 
-        mu_per_period = er_result.portfolio / periods_per_year
-        variance_per_period = risk_result.portfolio_volatility**2 / periods_per_year
-
-        mu = np.array([mu_per_period])
-        sigma = np.array([[variance_per_period]])
+        mu_per_period = np.array(
+            [er_result.per_asset[n] / periods_per_year for n in asset_names]
+        )
+        sigma_per_period = risk_result.covariance.to_numpy() / periods_per_year
 
         n_periods = self.horizon_years * periods_per_year
 
-        # Simulate period returns: shape (n_simulations, n_periods)
-        raw_draws = self.method.simulate(mu, sigma, n_periods, self.n_simulations)
+        # Draw per-asset period returns.
+        raw_draws = self.method.simulate(
+            mu_per_period, sigma_per_period, n_periods, self.n_simulations
+        )
 
-        # raw_draws may be (n_simulations, n_periods, 1) for multivariate case
-        if raw_draws.ndim == 3 and raw_draws.shape[2] == 1:
-            raw_draws = raw_draws[:, :, 0]
+        # Normalise to (n_sims, n_periods, n_assets).
+        # MonteCarlo returns (n_sims, n_periods, n_assets) for multivariate or
+        # (n_sims, n_periods) for univariate / single-asset.
+        # Bootstrap always returns (n_sims, n_periods) — broadcast same return
+        # to all assets (approximates constant-correlation, no per-asset split).
+        if raw_draws.ndim == 2:
+            raw_draws = np.repeat(raw_draws[:, :, np.newaxis], n_assets, axis=2)
 
         cashflows = self.cashflows or []
-        paths = self._build_paths(raw_draws, cashflows, periods_per_year)
+        asset_paths = self._build_asset_paths(
+            raw_draws, initial_values, asset_names, cashflows, periods_per_year
+        )
+        # asset_paths: (n_sims, n_periods + 1, n_assets)
 
         if real and self.inflation_rate:
             for t in range(1, n_periods + 1):
-                paths[:, t] /= (1.0 + self.inflation_rate) ** (t / periods_per_year)
+                asset_paths[:, t, :] /= (1.0 + self.inflation_rate) ** (t / periods_per_year)
+
+        # Total portfolio path = sum across assets.
+        paths: np.ndarray = asset_paths.sum(axis=2)
 
         parsed_start: date | None = None
         if start_date is not None:
@@ -187,14 +212,9 @@ class WealthSimulation:
             )
 
         percentile_df = self._compute_percentiles(paths, parsed_start, periods_per_year)
-
-        weights = portfolio.weights
-        pct_cols = ["p5", "p25", "p50", "p75", "p95"]
-        allocation_dollar: dict[str, pl.DataFrame] = {
-            name: percentile_df.with_columns(
-                [pl.col(c) * w for c in pct_cols]
-            )
-            for name, w in weights.items()
+        allocation_dollar = {
+            name: self._compute_percentiles(asset_paths[:, :, i], parsed_start, periods_per_year)
+            for i, name in enumerate(asset_names)
         }
 
         return SimulationResult(
@@ -208,64 +228,119 @@ class WealthSimulation:
             is_real=real,
         )
 
-    def _build_paths(
+    def _build_asset_paths(
         self,
-        period_returns: np.ndarray,
+        per_asset_returns: np.ndarray,
+        initial_values: np.ndarray,
+        asset_names: list[str],
         cashflows: list[CashflowDefinition],
         periods_per_year: int,
     ) -> np.ndarray:
-        """Build wealth paths from period returns and cash flows.
+        """Build per-asset wealth paths from return draws and routed cashflows.
 
         Parameters
         ----------
-        period_returns:
-            (n_simulations, n_periods) array of period returns.
+        per_asset_returns:
+            (n_sims, n_periods, n_assets) array of per-period, per-asset returns.
+        initial_values:
+            (n_assets,) starting dollar value for each asset.
+        asset_names:
+            Ordered asset names matching the last axis of ``per_asset_returns``.
         cashflows:
-            List of cash flow definitions.
+            Cash flow definitions; each may specify ``slots`` for routing.
         periods_per_year:
-            Number of periods per year (for cash flow timing).
+            Used for cashflow scheduling and inflation compounding.
 
         Returns
         -------
         np.ndarray
-            (n_simulations, n_periods + 1) array of wealth values.
+            (n_sims, n_periods + 1, n_assets) array of per-asset dollar values.
         """
-        n_sims, n_periods = period_returns.shape
-        paths = np.empty((n_sims, n_periods + 1))
-        paths[:, 0] = self.initial_wealth
+        n_sims, n_periods, n_assets = per_asset_returns.shape
+        asset_paths = np.empty((n_sims, n_periods + 1, n_assets))
+        asset_paths[:, 0, :] = initial_values
 
-        # Annual inflation factor per period
-        annual_inflation_rates = {
-            getattr(cf, "inflation_rate")
+        # Inflation factor per period, derived from cashflows that declare one.
+        inflation_rates = {
+            cf.inflation_rate
             for cf in cashflows
-            if hasattr(cf, "inflation_rate")
+            if isinstance(cf, PeriodicCashflow) and cf.inflation_rate
         }
-        # Use average inflation rate across all cashflows that have it
-        avg_inflation = (
-            sum(annual_inflation_rates) / len(annual_inflation_rates)
-            if annual_inflation_rates
-            else 0.0
-        )
+        avg_inflation = sum(inflation_rates) / len(inflation_rates) if inflation_rates else 0.0
         period_inflation = (
             (1.0 + avg_inflation) ** (1.0 / periods_per_year) if avg_inflation else 1.0
         )
 
-        for t in range(1, n_periods + 1):
-            # Apply period return
-            paths[:, t] = paths[:, t - 1] * (1.0 + period_returns[:, t - 1])
-
-            # Apply cash flows
-            if cashflows:
-                cumulative_inflation = period_inflation ** t
-                for sim_idx in range(n_sims):
-                    pv = float(paths[sim_idx, t])
-                    cf_total = sum(
-                        cf.amount_at(t, periods_per_year, pv, cumulative_inflation)
-                        for cf in cashflows
+        # Pre-resolve slot indices for each cashflow; validate once up-front.
+        asset_name_to_idx = {n: i for i, n in enumerate(asset_names)}
+        routing: list[list[int]] = []
+        for cf in cashflows:
+            slots = cf.slots
+            if slots:
+                missing = [s for s in slots if s not in asset_name_to_idx]
+                if missing:
+                    raise ValueError(
+                        f"Cashflow slots {missing} not found in portfolio slots {asset_names}."
                     )
-                    paths[sim_idx, t] += cf_total
+                routing.append([asset_name_to_idx[s] for s in slots])
+            else:
+                routing.append(list(range(n_assets)))
 
-        return paths
+        for t in range(1, n_periods + 1):
+            # Grow each asset by its own return for this period.
+            asset_paths[:, t, :] = asset_paths[:, t - 1, :] * (
+                1.0 + per_asset_returns[:, t - 1, :]
+            )
+
+            if not cashflows:
+                continue
+
+            cumulative_inflation = period_inflation ** t
+
+            for cf, target_indices in zip(cashflows, routing):
+                is_pct_mode = (
+                    isinstance(cf, PeriodicCashflow) and cf.mode != CashflowMode.DOLLAR
+                )
+
+                if is_pct_mode:
+                    # Amount depends on total portfolio value — loop per simulation.
+                    for sim_idx in range(n_sims):
+                        portfolio_value = float(asset_paths[sim_idx, t, :].sum())
+                        amount = cf.amount_at(
+                            t, periods_per_year, portfolio_value, cumulative_inflation
+                        )
+                        if amount == 0.0:
+                            continue
+                        self._distribute(asset_paths, sim_idx, t, target_indices, amount)
+                else:
+                    # Dollar / lump-sum: same amount for every simulation — vectorise.
+                    amount = cf.amount_at(t, periods_per_year, 0.0, cumulative_inflation)
+                    if amount == 0.0:
+                        continue
+                    target_vals = asset_paths[:, t, target_indices]  # (n_sims, n_targets)
+                    total_target = target_vals.sum(axis=1, keepdims=True)  # (n_sims, 1)
+                    safe_total = np.where(total_target > 0.0, total_target, 1.0)
+                    fractions = target_vals / safe_total
+                    asset_paths[:, t, target_indices] += amount * fractions
+
+        return asset_paths
+
+    @staticmethod
+    def _distribute(
+        asset_paths: np.ndarray,
+        sim_idx: int,
+        t: int,
+        target_indices: list[int],
+        amount: float,
+    ) -> None:
+        """Apply ``amount`` to target slots proportionally by their current values."""
+        target_vals = asset_paths[sim_idx, t, target_indices]
+        total_target = float(target_vals.sum())
+        if total_target > 0.0:
+            fractions = target_vals / total_target
+            asset_paths[sim_idx, t, target_indices] += amount * fractions
+        else:
+            asset_paths[sim_idx, t, target_indices] += amount / len(target_indices)
 
     @staticmethod
     def _compute_percentiles(
@@ -293,9 +368,7 @@ class WealthSimulation:
         """
         n_periods_plus_one = paths.shape[1]
         percentile_levels = [5, 25, 50, 75, 95]
-        pct_values: dict[str, list[float]] = {
-            f"p{p}": [] for p in percentile_levels
-        }
+        pct_values: dict[str, list[float]] = {f"p{p}": [] for p in percentile_levels}
         periods: list[int] = list(range(n_periods_plus_one))
 
         for t in range(n_periods_plus_one):
