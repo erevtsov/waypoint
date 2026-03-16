@@ -145,7 +145,21 @@ result.per_asset    # dict[str, float] — annualised per-asset returns
 result.portfolio    # float — weighted portfolio return
 ```
 
-Methods (`wp.returns`): `HistoricalMean`
+Methods (`wp.returns`): `HistoricalMean`, `ViewReturn`
+
+`ViewReturn` — forward-looking expected returns specified directly, ignoring history:
+
+```python
+# Direct construction (validated at compute time)
+portfolio.expected_return_method = wp.returns.ViewReturn(
+    expected_returns={"US Equities": 0.07, "US Bonds": 0.03}
+)
+
+# Validated at construction time against a specific portfolio
+portfolio.expected_return_method = wp.returns.ViewReturn.for_portfolio(
+    portfolio, expected_returns={"US Equities": 0.07, "US Bonds": 0.03}
+)
+```
 
 #### Risk / covariance — `wp.analytics.Risk`
 
@@ -157,7 +171,31 @@ result.volatilities         # dict[str, float] — per-asset annualised volatili
 result.portfolio_volatility # float — sqrt(w^T Σ w)
 ```
 
-Methods (`wp.risk`): `SampleCovariance`
+Methods (`wp.risk`): `SampleCovariance`, `ViewRisk`
+
+`ViewRisk` — forward-looking risk view: user-specified volatilities combined with a correlation structure (historical or manual):
+
+```python
+import numpy as np
+
+# Custom vols + historical correlations from SampleCovariance (default)
+portfolio.risk_method = wp.risk.ViewRisk(
+    volatilities={"US Equities": 0.15, "US Bonds": 0.06}
+)
+
+# Custom vols + fully specified correlation matrix
+portfolio.risk_method = wp.risk.ViewRisk(
+    volatilities={"US Equities": 0.15, "US Bonds": 0.06},
+    correlation_matrix=np.array([[1.0, 0.0], [0.0, 1.0]]),  # zero correlation
+)
+
+# Validated at construction time against a specific portfolio
+portfolio.risk_method = wp.risk.ViewRisk.for_portfolio(
+    portfolio,
+    volatilities={"US Equities": 0.15, "US Bonds": 0.06},
+    correlation_matrix=np.array([[1.0, 0.0], [0.0, 1.0]]),
+)
+```
 
 #### Efficient frontier — `wp.analytics.Optimizer`
 

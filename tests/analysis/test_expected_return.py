@@ -9,7 +9,7 @@ import polars as pl
 import pytest
 
 from waypoint.analysis.expected_return import ExpectedReturn, ExpectedReturnResult
-from waypoint.analysis.methods.returns import HistoricalMean
+from waypoint.analysis.methods.returns import HistoricalMean, ViewReturn
 from waypoint.assets import Asset
 from waypoint.portfolio import Portfolio
 
@@ -126,3 +126,62 @@ def test_expected_return_date_filter_respected() -> None:
     # We only assert both are finite floats
     assert isinstance(full.portfolio, float)
     assert isinstance(filtered.portfolio, float)
+
+
+# ---------------------------------------------------------------------------
+# ViewReturn
+# ---------------------------------------------------------------------------
+
+def test_view_return_returns_specified_values() -> None:
+    """ViewReturn must return the pre-specified value, ignoring historical data."""
+    portfolio = _make_portfolio()
+    method = ViewReturn(expected_returns={"Equities": 0.08, "Bonds": 0.03})
+    er = ExpectedReturn(method=method)
+    result = er.compute(portfolio, start=None, end=None, frequency="daily")
+    assert abs(result.per_asset["Equities"] - 0.08) < 1e-12
+    assert abs(result.per_asset["Bonds"] - 0.03) < 1e-12
+
+
+def test_view_return_portfolio_is_weighted_sum() -> None:
+    """Portfolio return must equal the weighted sum of specified per-asset values."""
+    portfolio = _make_portfolio(w_eq=0.6, w_fi=0.4)
+    method = ViewReturn(expected_returns={"Equities": 0.08, "Bonds": 0.03})
+    er = ExpectedReturn(method=method)
+    result = er.compute(portfolio, start=None, end=None, frequency="daily")
+    expected = 0.6 * 0.08 + 0.4 * 0.03
+    assert abs(result.portfolio - expected) < 1e-12
+
+
+def test_view_return_ignores_periods_per_year() -> None:
+    """ViewReturn must return the same value regardless of frequency/periods_per_year."""
+    portfolio = _make_portfolio()
+    method = ViewReturn(expected_returns={"Equities": 0.07, "Bonds": 0.02})
+    er = ExpectedReturn(method=method)
+    daily = er.compute(portfolio, start=None, end=None, frequency="daily")
+    # Re-run with a different name mapping — values must be identical
+    assert abs(daily.per_asset["Equities"] - 0.07) < 1e-12
+
+
+def test_view_return_missing_asset_raises() -> None:
+    """compute() must raise ValueError when an asset name is not in expected_returns."""
+    portfolio = _make_portfolio()
+    method = ViewReturn(expected_returns={"Equities": 0.08})  # missing "Bonds"
+    er = ExpectedReturn(method=method)
+    with pytest.raises(ValueError, match="Bonds"):
+        er.compute(portfolio, start=None, end=None, frequency="daily")
+
+
+def test_view_return_for_portfolio_validates_keys() -> None:
+    """for_portfolio raises ValueError when any slot is missing from expected_returns."""
+    portfolio = _make_portfolio()
+    with pytest.raises(ValueError, match="Bonds"):
+        ViewReturn.for_portfolio(portfolio, {"Equities": 0.08})
+
+
+def test_view_return_for_portfolio_returns_valid_instance() -> None:
+    """for_portfolio returns a usable ViewReturn when all keys are present."""
+    portfolio = _make_portfolio()
+    method = ViewReturn.for_portfolio(portfolio, {"Equities": 0.08, "Bonds": 0.03})
+    er = ExpectedReturn(method=method)
+    result = er.compute(portfolio, start=None, end=None, frequency="daily")
+    assert abs(result.per_asset["Equities"] - 0.08) < 1e-12
