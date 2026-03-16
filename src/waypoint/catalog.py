@@ -105,6 +105,29 @@ CPI_YOY = AssetDef(
 )
 
 # ---------------------------------------------------------------------------
+# Real estate — FHFA House Price Indices (FRED, quarterly)
+# ---------------------------------------------------------------------------
+MA_HPI = AssetDef(
+    name="Massachusetts House Price Index",
+    symbol="MASTHPI",
+    vendor="fred",
+    frequency=Frequency.QUARTERLY,
+    asset_class="Real Estate",
+    sub_asset_class="House Price Index",
+    geography="Massachusetts",
+)
+
+BOSTON_HPI = AssetDef(
+    name="Boston Metro Area House Price Index",
+    symbol="ATNHPIUS14454Q",
+    vendor="fred",
+    frequency=Frequency.QUARTERLY,
+    asset_class="Real Estate",
+    sub_asset_class="House Price Index",
+    geography="Massachusetts",
+)
+
+# ---------------------------------------------------------------------------
 # Indicators / FRED — IndicatorDef (raw levels; no pct_change)
 # ---------------------------------------------------------------------------
 US_10Y_YIELD = IndicatorDef(

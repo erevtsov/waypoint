@@ -61,3 +61,13 @@ def test_equity_asset_defs_are_daily() -> None:
 def test_indicator_defs_have_units() -> None:
     assert catalog.US_10Y_YIELD.unit == "percent"
     assert catalog.REAL_RATE_10Y.unit == "percent"
+
+
+def test_hpi_entries_are_asset_defs() -> None:
+    assert isinstance(catalog.MA_HPI, AssetDef)
+    assert isinstance(catalog.BOSTON_HPI, AssetDef)
+
+
+def test_hpi_entries_are_quarterly() -> None:
+    assert catalog.MA_HPI.frequency == Frequency.QUARTERLY
+    assert catalog.BOSTON_HPI.frequency == Frequency.QUARTERLY
