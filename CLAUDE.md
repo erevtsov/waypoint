@@ -119,6 +119,10 @@
 - Never install new dependencies without asking first
 - Never modify this file during a task unless explicitly asked
 
+## README sync
+- Keep `README.md` up to date whenever public API surface changes: new analytics, new catalog entries, new cashflow types, new simulation methods, new Portfolio properties, or changes to the `wp.*` namespace
+- README documents the public `import waypoint as wp` API only — not internals or test helpers
+
 ## Never Do
 - Never store prices internally — the library starts at returns
 - Never use pandas — use polars instead
