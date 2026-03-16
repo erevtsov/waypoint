@@ -5,10 +5,10 @@ Usage::
     import waypoint as wp
 
     # Returns an Asset (pct_change applied)
-    spy = wp.fetch(wp.catalog.US_LARGE_CAP, start="2020-01-01", end="2024-12-31")
+    spy = wp.fetch(wp.catalog.equities.US_LARGE_CAP, start="2020-01-01", end="2024-12-31")
 
     # Returns an Indicator (raw levels, no pct_change)
-    rf = wp.fetch(wp.catalog.US_10Y_YIELD, start="2020-01-01", end="2024-12-31")
+    rf = wp.fetch(wp.catalog.indicators.US_10Y_YIELD, start="2020-01-01", end="2024-12-31")
     risk_free_rate = float(rf.values["value"].tail(1).item()) / 100
 """
 

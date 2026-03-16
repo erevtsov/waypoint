@@ -24,8 +24,8 @@ import waypoint as wp
 # --- 1. Define a portfolio -------------------------------------------------
 portfolio = wp.Portfolio(
     slots={
-        "US Equities": wp.catalog.US_LARGE_CAP,
-        "US Bonds":    wp.catalog.US_AGG_BONDS,
+        "US Equities": wp.catalog.equities.US_LARGE_CAP,
+        "US Bonds":    wp.catalog.fixed_income.US_AGG_BONDS,
     },
     weights={"US Equities": 0.6, "US Bonds": 0.4},
     name="60/40",
@@ -68,7 +68,7 @@ An `Asset` holds a `pl.DataFrame[date, returns]` of decimal periodic returns. As
 
 ```python
 # Fetch from a vendor (cached locally as parquet)
-asset = wp.fetch(wp.catalog.US_LARGE_CAP, start="2020-01-01", end="2024-12-31")
+asset = wp.fetch(wp.catalog.equities.US_LARGE_CAP, start="2020-01-01", end="2024-12-31")
 
 # Construct directly
 import polars as pl
@@ -92,19 +92,51 @@ leveraged = wp.LeveragedAsset(
 
 ### Catalog
 
-Pre-defined `AssetDef` constants for common instruments:
+Pre-defined `AssetDef` and `IndicatorDef` constants organised by asset class. Access via submodule (preferred) or flat on `wp.catalog` (backward compatible):
+
+```python
+equities = wp.fetch(wp.catalog.equities.US_LARGE_CAP, start="2020-01-01", end="2024-12-31")
+bonds    = wp.fetch(wp.catalog.fixed_income.US_AGG_BONDS, start="2020-01-01", end="2024-12-31")
+hpi      = wp.fetch(wp.catalog.real_estate.MA_HPI, start="2010-01-01", end="2024-12-31")
+rf       = wp.fetch(wp.catalog.indicators.US_10Y_YIELD, start="2024-01-01", end="2024-12-31")
+```
+
+**`wp.catalog.equities`**
 
 | Constant | Description |
 |---|---|
-| `wp.catalog.US_LARGE_CAP` | S&P 500 (`^SPX`, yfinance) |
-| `wp.catalog.US_SMALL_CAP` | Russell 2000 (`^RUT`, yfinance) |
-| `wp.catalog.INTL_DEVELOPED` | MSCI EAFE (`EFA`, yfinance) |
-| `wp.catalog.EMERGING` | MSCI EM (`EEM`, yfinance) |
-| `wp.catalog.US_AGG_BONDS` | Bloomberg Aggregate (`AGG`, yfinance) |
-| `wp.catalog.US_TIPS` | US TIPS (`TIP`, yfinance) |
-| `wp.catalog.MA_HPI` | Massachusetts HPI (`MASTHPI`, FRED, quarterly) |
-| `wp.catalog.BOSTON_HPI` | Boston Metro HPI (`ATNHPIUS14454Q`, FRED, quarterly) |
-| `wp.catalog.US_10Y_YIELD` | 10-Year Treasury yield (`DGS10`, FRED — indicator, not return) |
+| `US_LARGE_CAP` | S&P 500 (`^SPX`, yfinance) |
+| `US_TOTAL_MARKET` | CRSP US Total Market (`^CRSPTM1`, yfinance) |
+| `US_LARGE_CAP_GROWTH` | CRSP US Large Cap Growth (`^CRSPLCG1`, yfinance) |
+| `NASDAQ_100` | NASDAQ-100 (`^NDX`, yfinance) |
+| `RUSSELL_1000` | Russell 1000 (`^RUI`, yfinance) |
+| `US_SMALL_CAP` | Russell 2000 (`^RUT`, yfinance) |
+| `INTL_DEVELOPED` | MSCI EAFE (`EFA`, yfinance) |
+| `EUROPE_DEVELOPED` | Europe Developed (`VGK`, yfinance) |
+| `EMERGING` | MSCI EM (`EEM`, yfinance) |
+| `CHINA_TECH` | China Technology (`CQQQ`, yfinance) |
+
+**`wp.catalog.fixed_income`**
+
+| Constant | Description |
+|---|---|
+| `US_AGG_BONDS` | Bloomberg Aggregate (`AGG`, yfinance) |
+| `US_TIPS` | US TIPS (`TIP`, yfinance) |
+| `CPI_YOY` | CPI YoY (`CPIAUCSL`, FRED, monthly) |
+
+**`wp.catalog.real_estate`**
+
+| Constant | Description |
+|---|---|
+| `MA_HPI` | Massachusetts HPI (`MASTHPI`, FRED, quarterly) |
+| `BOSTON_HPI` | Boston Metro HPI (`ATNHPIUS14454Q`, FRED, quarterly) |
+
+**`wp.catalog.indicators`** — `IndicatorDef` (raw levels, not returns)
+
+| Constant | Description |
+|---|---|
+| `US_10Y_YIELD` | 10-Year Treasury yield (`DGS10`, FRED) |
+| `REAL_RATE_10Y` | 10-Year Real Rate (`DFII10`, FRED) |
 
 ### Portfolio
 
@@ -262,14 +294,14 @@ wp.cashflows.LumpSum(amount=50_000, period=120)  # period 120 = month 120 = year
 
 ```python
 # Fetch an asset (returns Asset with pl.DataFrame[date, returns])
-asset = wp.fetch(wp.catalog.US_LARGE_CAP, start="2020-01-01", end="2024-12-31")
+asset = wp.fetch(wp.catalog.equities.US_LARGE_CAP, start="2020-01-01", end="2024-12-31")
 
 # Fetch an indicator (returns Indicator with pl.DataFrame[date, value] — raw levels)
-indicator = wp.fetch(wp.catalog.US_10Y_YIELD, start="2024-01-01", end="2024-12-31")
+indicator = wp.fetch(wp.catalog.indicators.US_10Y_YIELD, start="2024-01-01", end="2024-12-31")
 risk_free_rate = float(indicator.values["value"].tail(1).item()) / 100
 
 # Force refresh bypasses the local parquet cache
-asset = wp.fetch(wp.catalog.US_LARGE_CAP, start="2020-01-01", end="2024-12-31", force_refresh=True)
+asset = wp.fetch(wp.catalog.equities.US_LARGE_CAP, start="2020-01-01", end="2024-12-31", force_refresh=True)
 ```
 
 Data is cached locally as parquet files keyed by `{vendor}/{symbol}.parquet`. For daily instruments, the date range is snapped to full calendar months.
