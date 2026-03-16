@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, ClassVar, Literal, Protocol, runtime_checkable
 
 import numpy as np
 import polars as pl
+
+from waypoint.assets import Asset
 
 if TYPE_CHECKING:
     from waypoint.portfolio import Portfolio
@@ -153,3 +155,177 @@ class ViewReturn:
                 f"Provided keys: {sorted(self.expected_returns)}"
             )
         return self.expected_returns[name]
+
+
+class PortfolioReturnMethod(Protocol):
+    """Protocol for portfolio-level expected-return methods.
+
+    Unlike ``ReturnMethod``, these methods receive the full wide DataFrame
+    (all assets and dates) and return a mapping of asset name → annualised
+    expected return.  Implementations must set the class variable
+    ``_portfolio_level = True`` so that ``ExpectedReturn`` can dispatch
+    correctly without relying on ``isinstance`` signature matching.
+    """
+
+    _portfolio_level: ClassVar[Literal[True]]
+
+    def compute(
+        self,
+        wide: pl.DataFrame,
+        weights: dict[str, float],
+        periods_per_year: int,
+    ) -> dict[str, float]:
+        """Compute annualised expected returns for all portfolio assets.
+
+        Parameters
+        ----------
+        wide:
+            DataFrame with a ``"date"`` column and one column per asset.
+        weights:
+            Portfolio weights keyed by asset name.
+        periods_per_year:
+            Used to annualise return estimates.
+
+        Returns
+        -------
+        dict[str, float]
+            Mapping of asset name to annualised expected return.
+        """
+        ...
+
+
+def _capm_expected_return(
+    asset_returns: np.ndarray,
+    market_returns: np.ndarray,
+    e_rm: float,
+    rf: float,
+) -> float:
+    """Compute CAPM expected return for a single asset.
+
+    Parameters
+    ----------
+    asset_returns:
+        Array of periodic returns for the asset, aligned with ``market_returns``.
+    market_returns:
+        Array of periodic market returns.
+    e_rm:
+        Annualised expected market return.
+    rf:
+        Annualised risk-free rate.
+
+    Returns
+    -------
+    float
+        Annualised CAPM expected return: ``rf + beta * (e_rm - rf)``.
+
+    Raises
+    ------
+    ValueError
+        If ``market_returns`` has zero variance.
+    """
+    var_m = float(np.var(market_returns, ddof=1))
+    if var_m == 0.0:
+        raise ValueError("CAPM: market asset has zero return variance.")
+    cov_im = float(np.cov(asset_returns, market_returns, ddof=1)[0, 1])
+    beta = cov_im / var_m
+    return rf + beta * (e_rm - rf)
+
+
+@dataclass(frozen=True)
+class CAPM:
+    """CAPM single-factor expected return model.
+
+    Estimates per-asset expected returns as:
+
+        E[Ri] = Rf + βi × (E[Rm] − Rf)
+
+    where ``βi = cov(Ri, Rm) / var(Rm)`` is computed from the overlapping
+    historical returns of the portfolio, market, and (if an Asset)
+    risk-free series.
+
+    Parameters
+    ----------
+    market:
+        Asset representing the market benchmark (e.g. a broad equity index).
+    risk_free:
+        Risk-free rate as a constant annualised decimal (e.g. ``0.04``) or
+        an Asset whose return series represents the risk-free instrument
+        (e.g. a short-term T-bill ETF).  Must be supplied explicitly — there
+        is no default.
+    market_return_method:
+        Method used to estimate ``E[Rm]`` from the aligned market return
+        series.  Defaults to ``GeometricMean``.
+    """
+
+    _portfolio_level: ClassVar[Literal[True]] = True
+
+    market: Asset
+    risk_free: Asset | float
+    market_return_method: ReturnMethod = field(default_factory=GeometricMean)
+
+    def compute(
+        self,
+        wide: pl.DataFrame,
+        weights: dict[str, float],
+        periods_per_year: int,
+    ) -> dict[str, float]:
+        """Return CAPM expected returns for each asset in the portfolio.
+
+        Parameters
+        ----------
+        wide:
+            Wide DataFrame with a ``"date"`` column and one column per asset.
+        weights:
+            Portfolio weights (not used by CAPM; present to satisfy protocol).
+        periods_per_year:
+            Used to annualise the expected market and risk-free returns.
+
+        Returns
+        -------
+        dict[str, float]
+            Mapping of asset name to annualised CAPM expected return.
+
+        Raises
+        ------
+        ValueError
+            If there are no overlapping dates between the portfolio and the
+            market or risk-free assets, or if the market return variance is zero.
+        """
+        asset_cols = [c for c in wide.columns if c != "date"]
+
+        # Align market returns to the portfolio date window.
+        mkt_df = self.market.returns.rename({"returns": "__market__"})
+        aligned = wide.join(mkt_df, on="date", how="inner")
+        if len(aligned) == 0:
+            raise ValueError(
+                "CAPM: no overlapping dates between portfolio and market asset."
+            )
+
+        # Optionally align risk-free returns.
+        if isinstance(self.risk_free, float):
+            rf_annualised = self.risk_free
+        else:
+            rf_df = self.risk_free.returns.rename({"returns": "__rf__"})
+            aligned = aligned.join(rf_df, on="date", how="inner")
+            if len(aligned) == 0:
+                raise ValueError(
+                    "CAPM: no overlapping dates between portfolio, market, "
+                    "and risk-free asset."
+                )
+            rf_annualised = self.market_return_method.compute(
+                aligned["__rf__"], periods_per_year
+            )
+
+        mkt_returns = aligned["__market__"].to_numpy()
+        e_rm = self.market_return_method.compute(aligned["__market__"], periods_per_year)
+
+        per_asset: dict[str, float] = {}
+        for col in asset_cols:
+            per_asset[col] = _capm_expected_return(
+                asset_returns=aligned[col].to_numpy(),
+                market_returns=mkt_returns,
+                e_rm=e_rm,
+                rf=rf_annualised,
+            )
+
+        return per_asset

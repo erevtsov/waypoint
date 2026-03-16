@@ -32,9 +32,9 @@
   - `data/providers/base.py` — `Provider` Protocol
   - `data/providers/{yfinance,fred,eodhd}.py` — one file per vendor
 - `src/waypoint/analysis/` — all analytics
-  - `analysis/methods/returns.py` — pure return estimation functions (`HistoricalMean`, `EWMAMean`, …)
-  - `analysis/methods/risk.py` — pure covariance functions (`SampleCovariance`, `LedoitWolf`, …)
-  - `analysis/methods/simulation.py` — pure simulation engines (`MonteCarlo`, `Bootstrap`)
+  - `analysis/methods/returns.py` — return estimation methods; simple methods (`ArithmeticMean`, `GeometricMean`, `EWMAMean`) are pure math on arrays; methods requiring cross-asset alignment (e.g. `CAPM`) hold `Asset` refs and do domain work before delegating to private `_helper` calculation functions
+  - `analysis/methods/risk.py` — covariance/risk methods (same pattern: simple = pure math, complex = domain work + private helper)
+  - `analysis/methods/simulation.py` — simulation engines (`MonteCarlo`, `Bootstrap`)
   - `analysis/expected_return.py` — `ExpectedReturn` analytic (orchestrates methods/)
   - `analysis/risk.py` — `Risk` analytic
   - `analysis/optimizer.py` — `Optimizer` → `EfficientFrontierResult` (uses cvxpy via constraints.py)
@@ -61,7 +61,7 @@
 - `native_frequency` — coarsest native frequency across all slots; `get_returns(frequency=X)` raises if `X` is finer than `native_frequency`
 
 ## Analytics design
-- **Two layers**: pure math functions in `analysis/methods/` (no domain objects, just arrays/DataFrames) and analytic orchestrator classes in `analysis/` (extract inputs from Portfolio, call methods/, return Results)
+- **Two layers**: methods in `analysis/methods/` (operate on arrays/DataFrames, may hold `Asset` refs for alignment but never `Portfolio`) and analytic orchestrator classes in `analysis/` (extract inputs from Portfolio, call methods/, return Results). Within complex methods, extract pure math into private `_helper` functions so domain logic (data alignment, Asset joins) and calculation logic are separately readable.
 - **Method protocol** (Strategy pattern): each analytic family has a `Method` Protocol; pass the method at construction time — `ExpectedReturn(method=HistoricalMean())`
 - **Results are immutable frozen dataclasses** — re-run the analytic with different params to produce a new result
 - **Visualization**: free functions in `analysis/viz.py` (stateless, fully testable); each Result has a `.plot()` method that delegates to the relevant free function as the default view

@@ -9,7 +9,13 @@ import polars as pl
 import pytest
 
 from waypoint.analysis.expected_return import ExpectedReturn, ExpectedReturnResult
-from waypoint.analysis.methods.returns import ArithmeticMean, EWMAMean, GeometricMean, ViewReturn
+from waypoint.analysis.methods.returns import (
+    CAPM,
+    ArithmeticMean,
+    EWMAMean,
+    GeometricMean,
+    ViewReturn,
+)
 from waypoint.assets import Asset
 from waypoint.portfolio import Portfolio
 
@@ -271,3 +277,128 @@ def test_view_return_for_portfolio_returns_valid_instance() -> None:
     er = ExpectedReturn(method=method)
     result = er.compute(portfolio, start=None, end=None, frequency="daily")
     assert abs(result.per_asset["Equities"] - 0.08) < 1e-12
+
+
+# ---------------------------------------------------------------------------
+# CAPM
+# ---------------------------------------------------------------------------
+
+def _make_capm_assets(n: int = 300, seed: int = 99) -> tuple[Asset, Asset, Asset, Asset]:
+    """Return (market, rf, beta1_asset, beta0_asset) with known properties.
+
+    beta1_asset returns == market returns  →  beta = 1.
+    beta0_asset returns == constant 0.001  →  beta = 0 (no covariance with market).
+    """
+    rng = np.random.default_rng(seed=seed)
+    dates = [date(2015, 1, 1) + timedelta(days=i) for i in range(n)]
+
+    mkt_vals = rng.normal(0.0008, 0.01, n).tolist()
+    rf_vals = [0.0001] * n  # flat risk-free series
+
+    market = Asset(
+        name="Market", ticker="MKT",
+        returns=pl.DataFrame({"date": dates, "returns": mkt_vals}),
+        frequency="daily",
+    )
+    rf_asset = Asset(
+        name="RiskFree", ticker="RF",
+        returns=pl.DataFrame({"date": dates, "returns": rf_vals}),
+        frequency="daily",
+    )
+    beta1 = Asset(
+        name="Beta1", ticker="B1",
+        returns=pl.DataFrame({"date": dates, "returns": mkt_vals}),  # identical to market
+        frequency="daily",
+    )
+    beta0 = Asset(
+        name="Beta0", ticker="B0",
+        returns=pl.DataFrame({"date": dates, "returns": [0.001] * n}),
+        frequency="daily",
+    )
+    return market, rf_asset, beta1, beta0
+
+
+def test_capm_beta1_asset_returns_market_expected_return() -> None:
+    """Asset with returns identical to market must have CAPM E[R] == E[Rm]."""
+    market, _, beta1, _ = _make_capm_assets()
+    portfolio = Portfolio({"Beta1": beta1}, weights={"Beta1": 1.0})
+    method = CAPM(market=market, risk_free=0.02)
+    result = ExpectedReturn(method=method).compute(
+        portfolio, start=None, end=None, frequency="daily"
+    )
+    e_rm = GeometricMean().compute(market.returns["returns"], 252)
+    assert abs(result.per_asset["Beta1"] - e_rm) < 1e-10
+
+
+def test_capm_beta0_asset_returns_risk_free() -> None:
+    """Asset uncorrelated with the market must have CAPM E[R] == Rf."""
+    market, _, _, beta0 = _make_capm_assets()
+    rf = 0.04
+    portfolio = Portfolio({"Beta0": beta0}, weights={"Beta0": 1.0})
+    method = CAPM(market=market, risk_free=rf)
+    result = ExpectedReturn(method=method).compute(
+        portfolio, start=None, end=None, frequency="daily"
+    )
+    assert abs(result.per_asset["Beta0"] - rf) < 1e-10
+
+
+def test_capm_rf_asset_used_correctly() -> None:
+    """Passing rf as an Asset should give the same result as the equivalent float."""
+    market, rf_asset, beta1, _ = _make_capm_assets()
+    rf_float = GeometricMean().compute(rf_asset.returns["returns"], 252)
+
+    portfolio = Portfolio({"Beta1": beta1}, weights={"Beta1": 1.0})
+    result_float = ExpectedReturn(method=CAPM(market=market, risk_free=rf_float)).compute(
+        portfolio, start=None, end=None, frequency="daily"
+    )
+    result_asset = ExpectedReturn(method=CAPM(market=market, risk_free=rf_asset)).compute(
+        portfolio, start=None, end=None, frequency="daily"
+    )
+    assert abs(result_float.per_asset["Beta1"] - result_asset.per_asset["Beta1"]) < 1e-10
+
+
+def test_capm_market_return_method_is_used() -> None:
+    """Changing market_return_method must change the expected return estimate."""
+    market, _, beta1, _ = _make_capm_assets()
+    portfolio = Portfolio({"Beta1": beta1}, weights={"Beta1": 1.0})
+    geo = ExpectedReturn(
+        method=CAPM(market=market, risk_free=0.02, market_return_method=GeometricMean())
+    ).compute(portfolio, start=None, end=None, frequency="daily")
+    arith = ExpectedReturn(
+        method=CAPM(market=market, risk_free=0.02, market_return_method=ArithmeticMean())
+    ).compute(portfolio, start=None, end=None, frequency="daily")
+    # With volatile market returns geometric < arithmetic (roughly)
+    assert geo.per_asset["Beta1"] != arith.per_asset["Beta1"]
+
+
+def test_capm_no_overlapping_dates_raises() -> None:
+    """ValueError when market dates don't overlap with portfolio dates."""
+    rng = np.random.default_rng(seed=5)
+    n = 50
+    port_dates = [date(2020, 1, 1) + timedelta(days=i) for i in range(n)]
+    mkt_dates = [date(2021, 6, 1) + timedelta(days=i) for i in range(n)]  # no overlap
+
+    port_asset = Asset(
+        name="A", ticker="A",
+        returns=pl.DataFrame({"date": port_dates, "returns": [0.001] * n}),
+        frequency="daily",
+    )
+    market = Asset(
+        name="MKT", ticker="MKT",
+        returns=pl.DataFrame({"date": mkt_dates, "returns": rng.normal(0.001, 0.01, n).tolist()}),
+        frequency="daily",
+    )
+    portfolio = Portfolio({"A": port_asset}, weights={"A": 1.0})
+    with pytest.raises(ValueError, match="overlapping dates"):
+        ExpectedReturn(method=CAPM(market=market, risk_free=0.0)).compute(
+            portfolio, start=None, end=None, frequency="daily"
+        )
+
+
+def test_capm_method_name() -> None:
+    market, _, beta1, _ = _make_capm_assets()
+    portfolio = Portfolio({"Beta1": beta1}, weights={"Beta1": 1.0})
+    result = ExpectedReturn(method=CAPM(market=market, risk_free=0.02)).compute(
+        portfolio, start=None, end=None, frequency="daily"
+    )
+    assert result.method_name == "CAPM"

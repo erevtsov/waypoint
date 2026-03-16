@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from waypoint.portfolio import Portfolio
 
-from waypoint.analysis.methods.returns import ReturnMethod
+from waypoint.analysis.methods.returns import PortfolioReturnMethod, ReturnMethod
 from waypoint.enums import PERIODS_PER_YEAR, Frequency
 
 
@@ -42,7 +42,7 @@ class ExpectedReturn:
         An object implementing the ``ReturnMethod`` protocol.
     """
 
-    method: ReturnMethod
+    method: ReturnMethod | PortfolioReturnMethod
 
     def compute(
         self,
@@ -72,11 +72,17 @@ class ExpectedReturn:
         wide = portfolio.get_returns(start, end, frequency=freq)
         asset_cols = [c for c in wide.columns if c != "date"]
 
-        per_asset: dict[str, float] = {}
-        for col in asset_cols:
-            per_asset[col] = self.method.compute(wide[col], periods_per_year)
-
         weights = portfolio.weights
+
+        per_asset: dict[str, float] = {}
+        if getattr(self.method, "_portfolio_level", False):
+            per_asset = cast(PortfolioReturnMethod, self.method).compute(
+                wide, weights, periods_per_year
+            )
+        else:
+            per_asset_method = cast(ReturnMethod, self.method)
+            for col in asset_cols:
+                per_asset[col] = per_asset_method.compute(wide[col], periods_per_year)
         portfolio_return = sum(weights[name] * per_asset[name] for name in asset_cols)
 
         return ExpectedReturnResult(
