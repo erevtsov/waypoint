@@ -222,6 +222,76 @@ def test_monthly_resample_end_of_month_dates() -> None:
         assert next_day.month != d.month, f"{d} is not the last day of its month"
 
 
+def _make_quarterly_asset(name: str, ticker: str, n: int = 8) -> Asset:
+    """Quarterly asset with *n* end-of-quarter observations starting 2020-Q1."""
+    quarter_ends = [
+        date(2020, 3, 31), date(2020, 6, 30), date(2020, 9, 30), date(2020, 12, 31),
+        date(2021, 3, 31), date(2021, 6, 30), date(2021, 9, 30), date(2021, 12, 31),
+    ]
+    rng = np.random.default_rng(seed=99)
+    values = rng.normal(0.02, 0.03, n).tolist()
+    returns = pl.DataFrame({"date": quarter_ends[:n], "returns": values})
+    return Asset(name=name, ticker=ticker, returns=returns, frequency="quarterly")
+
+
+# ---------------------------------------------------------------------------
+# native_frequency
+# ---------------------------------------------------------------------------
+
+def test_native_frequency_all_daily() -> None:
+    """All-daily portfolio → native frequency is daily."""
+    eq = _make_asset("Equities", "SPY")
+    fi = _make_asset("Bonds", "AGG", seed=7)
+    p = Portfolio({"eq": eq, "fi": fi}, weights={"eq": 0.6, "fi": 0.4})
+    assert p.native_frequency == Frequency.DAILY
+
+
+def test_native_frequency_mixed_daily_quarterly() -> None:
+    """Portfolio with a quarterly slot → native frequency is quarterly."""
+    daily = _make_asset("Equities", "SPY")
+    quarterly = _make_quarterly_asset("HPI", "HPI")
+    p = Portfolio({"d": daily, "q": quarterly}, weights={"d": 0.5, "q": 0.5})
+    assert p.native_frequency == Frequency.QUARTERLY
+
+
+def test_native_frequency_all_quarterly() -> None:
+    """All-quarterly portfolio → native frequency is quarterly."""
+    q1 = _make_quarterly_asset("HPI1", "A")
+    q2 = _make_quarterly_asset("HPI2", "B", n=8)
+    p = Portfolio({"q1": q1, "q2": q2}, weights={"q1": 0.5, "q2": 0.5})
+    assert p.native_frequency == Frequency.QUARTERLY
+
+
+def test_get_returns_raises_when_frequency_too_fine() -> None:
+    """Requesting monthly from a portfolio with a quarterly slot raises ValueError."""
+    daily = _make_asset("Equities", "SPY", n=500)
+    quarterly = _make_quarterly_asset("HPI", "HPI")
+    p = Portfolio({"d": daily, "q": quarterly}, weights={"d": 0.5, "q": 0.5})
+    with pytest.raises(ValueError, match="finer"):
+        p.get_returns(frequency=Frequency.MONTHLY)
+
+
+def test_get_returns_raises_names_offending_slots() -> None:
+    """The ValueError must name which slot(s) are too coarse."""
+    daily = _make_asset("Equities", "SPY", n=500)
+    quarterly = _make_quarterly_asset("Condo HPI", "HPI")
+    p = Portfolio(
+        {"Equities": daily, "Condo HPI": quarterly},
+        weights={"Equities": 0.5, "Condo HPI": 0.5},
+    )
+    with pytest.raises(ValueError, match="Condo HPI"):
+        p.get_returns(frequency=Frequency.DAILY)
+
+
+def test_get_returns_at_native_frequency_does_not_raise() -> None:
+    """Requesting exactly the native frequency must succeed."""
+    daily = _make_asset("Equities", "SPY", n=500)
+    quarterly = _make_quarterly_asset("HPI", "HPI")
+    p = Portfolio({"d": daily, "q": quarterly}, weights={"d": 0.5, "q": 0.5})
+    result = p.get_returns(frequency=Frequency.QUARTERLY)
+    assert len(result) > 0
+
+
 def test_quarterly_asset_accepted() -> None:
     """Asset with frequency='quarterly' should be constructed without error."""
     dates = [date(2020, 3, 31), date(2020, 6, 30), date(2020, 9, 30), date(2020, 12, 31)]
@@ -252,6 +322,40 @@ def test_quarterly_resample_end_of_quarter_dates() -> None:
     quarter_ends = {(3, 31), (6, 30), (9, 30), (12, 31)}
     for d in quarterly["date"].to_list():
         assert (d.month, d.day) in quarter_ends, f"Unexpected quarter-end date: {d}"
+
+
+def test_mixed_frequency_portfolio_resamples_daily_before_join() -> None:
+    """A portfolio with daily + quarterly assets at quarterly frequency should
+    compound the daily asset over each quarter, not sample a single daily return."""
+    # Quarterly asset: 4 end-of-quarter dates with a fixed 2% quarterly return
+    q_dates = [date(2021, 3, 31), date(2021, 6, 30), date(2021, 9, 30), date(2021, 12, 31)]
+    quarterly_asset = Asset(
+        name="Q", ticker="Q",
+        returns=pl.DataFrame({"date": q_dates, "returns": [0.02] * 4}),
+        frequency="quarterly",
+    )
+    # Daily asset: every calendar day in 2021 with constant 0.001 daily return
+    daily_r = 0.001
+    d_dates = [date(2021, 1, 1) + timedelta(days=i) for i in range(365)]
+    daily_asset = Asset(
+        name="D", ticker="D",
+        returns=pl.DataFrame({"date": d_dates, "returns": [daily_r] * 365}),
+        frequency="daily",
+    )
+    p = Portfolio({"Q": quarterly_asset, "D": daily_asset}, weights={"Q": 0.5, "D": 0.5})
+    wide = p.get_returns(frequency=Frequency.QUARTERLY)
+
+    # Must have 4 quarterly rows (not fewer due to sparse inner-join before resampling)
+    assert len(wide) == 4, f"Expected 4 quarterly rows, got {len(wide)}"
+    # Quarterly asset values should be unchanged (single observation per quarter)
+    for val in wide["Q"].to_list():
+        assert abs(val - 0.02) < 1e-9, f"Quarterly asset return should be 0.02, got {val}"
+    # Daily asset should be compounded, not a single-day sample (~0.001)
+    for val in wide["D"].to_list():
+        assert val > 0.05, (
+            f"Daily asset should compound to >5% per quarter, got {val:.4f}. "
+            "Did the daily return get sampled at a single date instead of compounded?"
+        )
 
 
 def test_quarterly_resample_compounds_correctly() -> None:

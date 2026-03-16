@@ -73,19 +73,27 @@ class PeriodicCashflow:
         cumulative_inflation:
             Compound inflation factor since inception (1.0 = no inflation).
         """
-        cashflow_every = periods_per_year // CASHFLOW_PERIODS[self.frequency]
+        cashflow_periods = CASHFLOW_PERIODS[self.frequency]
         # period 0 is the starting period — cashflows apply from period 1 onward
         if period == 0:
             return 0.0
-        if period % cashflow_every != 0:
-            return 0.0
+        if cashflow_periods >= periods_per_year:
+            # Cashflow fires more often than simulation steps: bundle multiple
+            # payments into each period (e.g. 3 monthly payments per quarter).
+            count = cashflow_periods // periods_per_year
+        else:
+            # Cashflow fires less often: only apply on the matching boundary.
+            cashflow_every = periods_per_year // cashflow_periods
+            if period % cashflow_every != 0:
+                return 0.0
+            count = 1
 
         if self.mode == CashflowMode.DOLLAR:
-            return self.amount * cumulative_inflation
+            return self.amount * count * cumulative_inflation
         elif self.mode == CashflowMode.PCT_PORTFOLIO:
-            return self.amount * portfolio_value
+            return self.amount * count * portfolio_value
         elif self.mode == CashflowMode.PCT_PORTFOLIO_INFLATION_ADJUSTED:
-            return self.amount * portfolio_value
+            return self.amount * count * portfolio_value
         return 0.0
 
 

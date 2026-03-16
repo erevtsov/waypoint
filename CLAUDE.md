@@ -73,6 +73,10 @@
 - `PERIODS_PER_YEAR` in `enums.py` is keyed by `Frequency`; plain-string lookup works due to `StrEnum` hash equality
 - `Indicator` vs `Asset`: use `AssetDef`/`Asset` for return series (pct_change applied); use `IndicatorDef`/`Indicator` for level/rate series (raw values, no pct_change)
 
+## Notebooks
+- Always use `import waypoint as wp` as the sole top-level import; never import from submodules directly
+- Access catalog constants as `wp.catalog.SPY`, domain objects as `wp.Portfolio`, analytics as `wp.analytics.WealthSimulation`, simulation methods as `wp.sim.MonteCarlo`, cashflows as `wp.cashflows.PeriodicCashflow`, etc.
+
 ## Conventions
 - Always use decimal returns, never percentages or prices
 - Always add analysis as free functions in `analysis/`; never as domain object methods

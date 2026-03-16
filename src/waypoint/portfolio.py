@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from waypoint.asset_def import AssetDef
     from waypoint.assets import Asset, LeveragedAsset
 
-from waypoint.enums import Frequency
+from waypoint.enums import PERIODS_PER_YEAR, Frequency
 
 # Sentinel used as cache key when no date range is specified
 _NO_DATE = date(1, 1, 1)
@@ -136,6 +136,20 @@ class Portfolio:
         """Ordered list of slot names."""
         return list(self._slots)
 
+    @property
+    def native_frequency(self) -> Frequency:
+        """Coarsest native frequency across all portfolio slots.
+
+        This is the finest resolution at which the full portfolio can be
+        evaluated without disaggregating any asset — i.e. the coarsest slot
+        frequency limits the whole portfolio.  Requesting any frequency finer
+        than this in ``get_returns`` raises a ``ValueError``.
+        """
+        return min(
+            (slot.frequency for slot in self._slots.values()),
+            key=lambda f: PERIODS_PER_YEAR[f],
+        )
+
     # ------------------------------------------------------------------
     # Data access
     # ------------------------------------------------------------------
@@ -179,6 +193,21 @@ class Portfolio:
         end_dt: date | None = date.fromisoformat(end) if isinstance(end, str) else end
         freq: Frequency | None = Frequency(frequency) if frequency is not None else None
 
+        if freq is not None:
+            requested_ppy = PERIODS_PER_YEAR[freq]
+            native_ppy = PERIODS_PER_YEAR[self.native_frequency]
+            if requested_ppy > native_ppy:
+                offending = [
+                    name
+                    for name, slot in self._slots.items()
+                    if PERIODS_PER_YEAR[slot.frequency] < requested_ppy
+                ]
+                raise ValueError(
+                    f"Requested frequency {str(freq)!r} ({requested_ppy} periods/year) is finer "
+                    f"than the native frequency of slot(s) {offending}. "
+                    f"Use {str(self.native_frequency)!r} or coarser."
+                )
+
         cache_key = (start_dt or _NO_DATE, end_dt or _NO_DATE, freq)
         if cache_key in self._cache:
             return self._cache[cache_key]
@@ -195,15 +224,18 @@ class Portfolio:
                     if start_dt is not None
                     else slot.returns
                 )
-            frames.append(returns_df.rename({"returns": slot_name}))
+            # Resample each asset individually before joining so that higher-frequency
+            # assets are compounded to the target frequency (e.g. daily → quarterly)
+            # rather than being sampled at the sparse dates of lower-frequency assets.
+            single = returns_df.rename({"returns": slot_name})
+            if freq is not None:
+                single = _resample_wide(single, freq)
+            frames.append(single)
 
-        # Inner-join all frames on date so every column covers the same dates
+        # Inner-join all (already-resampled) frames on date
         wide = frames[0]
         for frame in frames[1:]:
             wide = wide.join(frame, on="date", how="inner")
-
-        if freq is not None:
-            wide = _resample_wide(wide, freq)
 
         self._cache[cache_key] = wide
         return wide

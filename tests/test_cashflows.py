@@ -98,6 +98,30 @@ def test_periodic_cashflow_pct_portfolio_inflation_adjusted() -> None:
 # PeriodicCashflow — validation
 # ---------------------------------------------------------------------------
 
+def test_periodic_cashflow_monthly_with_quarterly_simulation() -> None:
+    """Monthly cashflow bundled into quarterly simulation periods (3 payments/quarter)."""
+    cf = PeriodicCashflow(amount=1000.0, frequency="monthly", mode="dollar")
+    # periods_per_year=4 (quarterly); cashflow fires 12/year → 3 per quarter
+    result = cf.amount_at(
+        period=1, periods_per_year=4, portfolio_value=0.0, cumulative_inflation=1.0
+    )
+    assert abs(result - 3000.0) < 1e-9
+
+
+def test_periodic_cashflow_annual_with_quarterly_simulation() -> None:
+    """Annual cashflow fires once every 4 quarters."""
+    cf = PeriodicCashflow(amount=12_000.0, frequency="annual", mode="dollar")
+    # periods_per_year=4; fires every 4th period
+    result_at_4 = cf.amount_at(
+        period=4, periods_per_year=4, portfolio_value=0.0, cumulative_inflation=1.0
+    )
+    result_at_1 = cf.amount_at(
+        period=1, periods_per_year=4, portfolio_value=0.0, cumulative_inflation=1.0
+    )
+    assert abs(result_at_4 - 12_000.0) < 1e-9
+    assert result_at_1 == 0.0
+
+
 def test_periodic_cashflow_invalid_frequency() -> None:
     with pytest.raises(ValueError, match="frequency"):
         PeriodicCashflow(amount=100.0, frequency="weekly")
