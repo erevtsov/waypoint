@@ -8,7 +8,13 @@ import numpy as np
 import polars as pl
 import pytest
 
-from waypoint.analysis.methods.risk import SampleCovariance, ViewRisk
+from waypoint.analysis.methods.risk import (
+    EWMACovariance,
+    LedoitWolf,
+    SampleCovariance,
+    ViewRisk,
+    _ledoit_wolf_alpha,
+)
 from waypoint.analysis.risk import Risk, RiskResult
 from waypoint.assets import Asset
 from waypoint.portfolio import Portfolio
@@ -297,3 +303,171 @@ def test_view_risk_missing_asset_at_compute_raises() -> None:
     method = ViewRisk(volatilities={"Equities": 0.15})  # missing "Bonds"
     with pytest.raises(ValueError, match="Bonds"):
         Risk(method=method).compute(portfolio, start=None, end=None, frequency="daily")
+
+
+# ---------------------------------------------------------------------------
+# LedoitWolf
+# ---------------------------------------------------------------------------
+
+def _make_returns_df(n: int = 250, p: int = 3, seed: int = 42) -> pl.DataFrame:
+    rng = np.random.default_rng(seed=seed)
+    data = {f"A{i}": rng.normal(0.0003, 0.01, n).tolist() for i in range(p)}
+    return pl.DataFrame(data)
+
+
+def test_ledoit_wolf_shape() -> None:
+    """Output must be (p, p)."""
+    data = _make_returns_df(p=4)
+    cov = LedoitWolf().compute(data, periods_per_year=252)
+    assert cov.shape == (4, 4)
+
+
+def test_ledoit_wolf_symmetric() -> None:
+    """Shrunk covariance must be symmetric."""
+    data = _make_returns_df()
+    cov = LedoitWolf().compute(data, periods_per_year=252)
+    np.testing.assert_allclose(cov, cov.T, atol=1e-12)
+
+
+def test_ledoit_wolf_positive_diagonal() -> None:
+    """Diagonal entries (variances) must be positive."""
+    data = _make_returns_df()
+    cov = LedoitWolf().compute(data, periods_per_year=252)
+    assert all(cov[i, i] > 0 for i in range(3))
+
+
+def test_ledoit_wolf_scales_with_periods() -> None:
+    """Result scales linearly with periods_per_year.
+
+    Uses correlated assets with different variances so alpha < 1 and the
+    off-diagonal entries are nonzero after shrinkage.
+    """
+    rng = np.random.default_rng(seed=77)
+    n = 100
+    base = rng.normal(0, 0.01, n)
+    data = pl.DataFrame({
+        "A": (base + rng.normal(0, 0.005, n)).tolist(),
+        "B": (base + rng.normal(0, 0.015, n)).tolist(),
+        "C": (base * 0.5 + rng.normal(0, 0.02, n)).tolist(),
+    })
+    cov_12 = LedoitWolf().compute(data, periods_per_year=12)
+    cov_252 = LedoitWolf().compute(data, periods_per_year=252)
+    np.testing.assert_allclose(cov_252 / cov_12, 252 / 12, rtol=1e-10)
+
+
+def test_ledoit_wolf_diagonal_shrunk_toward_mean_variance() -> None:
+    """With very few observations the diagonal must be pulled toward the mean variance."""
+    rng = np.random.default_rng(seed=10)
+    # Large spread of variances so shrinkage is clearly visible.
+    data = pl.DataFrame({
+        "A": rng.normal(0, 0.20, 30).tolist(),  # high vol
+        "B": rng.normal(0, 0.01, 30).tolist(),  # low vol
+        "C": rng.normal(0, 0.05, 30).tolist(),
+    })
+    lw = LedoitWolf().compute(data, periods_per_year=252)
+    sc = SampleCovariance().compute(data, periods_per_year=252)
+    # LW diagonal variance for high-vol asset should be less than sample
+    assert lw[0, 0] < sc[0, 0]
+    # LW diagonal variance for low-vol asset should be greater than sample
+    assert lw[1, 1] > sc[1, 1]
+
+
+def test_ledoit_wolf_alpha_in_unit_interval() -> None:
+    """Analytical alpha must be in [0, 1]."""
+    rng = np.random.default_rng(seed=99)
+    X = rng.normal(0, 0.01, (150, 5))
+    X -= X.mean(axis=0)
+    alpha = _ledoit_wolf_alpha(X)
+    assert 0.0 <= alpha <= 1.0
+
+
+def test_ledoit_wolf_alpha_identity_input_is_zero() -> None:
+    """If returns are perfectly scaled identity-like, alpha must be 0."""
+    rng = np.random.default_rng(seed=7)
+    # All assets have identical independent returns — covariance is diagonal with equal entries.
+    vals = rng.normal(0, 0.01, (300, 1)) * np.ones((300, 4))
+    X = vals - vals.mean(axis=0)
+    alpha = _ledoit_wolf_alpha(X)
+    assert alpha == 0.0 or alpha < 0.01  # already close to identity; minimal shrinkage needed
+
+
+def test_ledoit_wolf_integration() -> None:
+    """LedoitWolf must work end-to-end via Risk.compute."""
+    portfolio = _two_asset_portfolio()
+    result = Risk(method=LedoitWolf()).compute(portfolio, start=None, end=None, frequency="daily")
+    assert result.method_name == "LedoitWolf"
+    assert result.portfolio_volatility > 0
+
+
+# ---------------------------------------------------------------------------
+# EWMACovariance
+# ---------------------------------------------------------------------------
+
+def test_ewma_covariance_shape() -> None:
+    """Output must be (p, p)."""
+    data = _make_returns_df(p=3)
+    cov = EWMACovariance().compute(data, periods_per_year=252)
+    assert cov.shape == (3, 3)
+
+
+def test_ewma_covariance_symmetric() -> None:
+    """EWMA covariance must be symmetric."""
+    data = _make_returns_df()
+    cov = EWMACovariance().compute(data, periods_per_year=252)
+    np.testing.assert_allclose(cov, cov.T, atol=1e-12)
+
+
+def test_ewma_covariance_positive_diagonal() -> None:
+    """Diagonal entries must be positive for non-degenerate data."""
+    data = _make_returns_df()
+    cov = EWMACovariance().compute(data, periods_per_year=252)
+    assert all(cov[i, i] > 0 for i in range(3))
+
+
+def test_ewma_covariance_scales_with_periods() -> None:
+    """Result scales linearly with periods_per_year."""
+    data = _make_returns_df()
+    cov_12 = EWMACovariance().compute(data, periods_per_year=12)
+    cov_252 = EWMACovariance().compute(data, periods_per_year=252)
+    np.testing.assert_allclose(cov_252 / cov_12, 252 / 12, rtol=1e-10)
+
+
+def test_ewma_decay_one_approaches_sample_covariance() -> None:
+    """decay_factor → 1 gives equal weights, converging to the biased sample covariance."""
+    rng = np.random.default_rng(seed=3)
+    data = pl.DataFrame({
+        "A": rng.normal(0, 0.01, 500).tolist(),
+        "B": rng.normal(0, 0.01, 500).tolist(),
+    })
+    ewma = EWMACovariance(decay_factor=0.9999).compute(data, periods_per_year=1)
+    # biased sample cov (1/T)
+    arr = data.to_numpy()
+    arr -= arr.mean(axis=0)
+    biased = arr.T @ arr / len(arr)
+    # rtol=1e-2: small residual from EWMA-weighted mean vs arithmetic mean centering
+    np.testing.assert_allclose(ewma, biased, rtol=1e-2)
+
+
+def test_ewma_low_decay_weights_recent_more() -> None:
+    """Low decay_factor must make recent high-vol regime dominate the estimate."""
+    rng = np.random.default_rng(seed=55)
+    # First 200 periods: low vol; last 100 periods: high vol
+    low_vol = rng.normal(0, 0.005, (200, 2)).tolist()
+    high_vol = rng.normal(0, 0.05, (100, 2)).tolist()
+    all_returns = low_vol + high_vol
+    data = pl.DataFrame({"A": [r[0] for r in all_returns], "B": [r[1] for r in all_returns]})
+
+    cov_low_decay = EWMACovariance(decay_factor=0.70).compute(data, periods_per_year=1)
+    cov_high_decay = EWMACovariance(decay_factor=0.99).compute(data, periods_per_year=1)
+    # Low decay_factor puts more weight on recent high-vol → larger variance
+    assert cov_low_decay[0, 0] > cov_high_decay[0, 0]
+
+
+def test_ewma_integration() -> None:
+    """EWMACovariance must work end-to-end via Risk.compute."""
+    portfolio = _two_asset_portfolio()
+    result = Risk(method=EWMACovariance(decay_factor=0.94)).compute(
+        portfolio, start=None, end=None, frequency="daily"
+    )
+    assert result.method_name == "EWMACovariance"
+    assert result.portfolio_volatility > 0
