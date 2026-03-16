@@ -30,3 +30,33 @@ def to_returns(df: pl.DataFrame) -> pl.DataFrame:
     )
     # Drop the first row (null returns from pct_change)
     return result.drop_nulls()
+
+
+MONEY_MARKET_DAY_COUNT = 360
+"""Day-count denominator for ACT/360 money-market conventions (e.g. T-bill rates)."""
+
+
+def rate_to_daily_returns(df: pl.DataFrame) -> pl.DataFrame:
+    """Convert an annualized rate DataFrame to a daily decimal return DataFrame.
+
+    Uses the ACT/360 money-market day-count convention::
+
+        r_daily = annualized_rate / 100 / 360
+
+    Parameters
+    ----------
+    df:
+        DataFrame with columns ``"date"`` (``pl.Date``) and ``"close"``
+        (``pl.Float64``) where ``"close"`` holds annualized rates in percent
+        (e.g. ``5.25`` for 5.25% per year).
+
+    Returns
+    -------
+    pl.DataFrame
+        DataFrame with columns ``"date"`` (``pl.Date``) and ``"returns"``
+        (``pl.Float64``) of decimal daily returns.
+    """
+    return df.select(
+        pl.col("date"),
+        (pl.col("close") / 100 / MONEY_MARKET_DAY_COUNT).alias("returns"),
+    )
