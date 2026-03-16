@@ -23,30 +23,37 @@ class PeriodicCashflow:
     Parameters
     ----------
     amount:
-        Base cash flow amount.
+        Base cash flow amount.  For withdrawals (``amount < 0``) with
+        ``effective_tax_rate > 0``, this is the **net** (after-tax) amount
+        the beneficiary receives; the portfolio is drawn down by
+        ``amount / (1 - effective_tax_rate)``.
     frequency:
         ``"monthly"`` or ``"annual"``.  Accepts a ``Frequency`` member or
         its lowercase string equivalent.
     mode:
-        ``"dollar"``, ``"pct_portfolio"``, or
-        ``"pct_portfolio_inflation_adjusted"``.  Accepts a ``CashflowMode``
+        ``"dollar"`` or ``"pct_portfolio"``.  Accepts a ``CashflowMode``
         member or its lowercase string equivalent.
-    inflation_rate:
-        Annual inflation rate (e.g. 0.03 for 3%).  Only used when
-        ``mode == CashflowMode.DOLLAR`` — dollar amounts grow by this rate
-        each year.
+    real:
+        When ``True``, ``amount`` is expressed in today's dollars and is
+        scaled by the simulation's cumulative inflation factor at each
+        period.  Only applies to ``mode="dollar"``.  Defaults to ``False``
+        (nominal — amount is in future dollars as stated).
+    effective_tax_rate:
+        Marginal tax rate applied to withdrawals (``amount < 0``).  The
+        portfolio is drawn down by ``|amount| / (1 - rate)`` so that the
+        net receipt equals ``|amount|``.  Has no effect on contributions.
+        Defaults to ``0.0`` (no tax adjustment).
     slots:
         Portfolio slot names that receive this cash flow.  ``None`` (default)
         means all slots receive the cash flow proportionally.  Use this to
-        restrict contributions or withdrawals to liquid assets only — e.g.
-        ``slots=("Equities", "Bonds")`` keeps the cash flow out of a real
-        estate slot that cannot be incrementally purchased.
+        restrict contributions or withdrawals to liquid assets only.
     """
 
     amount: float
     frequency: Frequency = field(default=Frequency.MONTHLY)
     mode: CashflowMode = field(default=CashflowMode.DOLLAR)
-    inflation_rate: float = field(default=0.0)
+    real: bool = field(default=False)
+    effective_tax_rate: float = field(default=0.0)
     slots: tuple[str, ...] | None = field(default=None)
 
     def __post_init__(self) -> None:
@@ -67,9 +74,11 @@ class PeriodicCashflow:
         portfolio_value: float,
         cumulative_inflation: float,
     ) -> float:
-        """Return the cash flow amount at the given simulation period.
+        """Return the portfolio impact at the given simulation period.
 
-        Returns 0.0 when the cash flow does not fall on this period.
+        For withdrawals with ``effective_tax_rate > 0``, returns the gross
+        draw-down amount (larger than the net ``amount``).  Returns 0.0 when
+        the cash flow does not fall on this period.
 
         Parameters
         ----------
@@ -80,30 +89,29 @@ class PeriodicCashflow:
         portfolio_value:
             Current portfolio value before the cash flow is applied.
         cumulative_inflation:
-            Compound inflation factor since inception (1.0 = no inflation).
+            Compound inflation factor since inception (1.0 = no inflation),
+            supplied by ``WealthSimulation`` from its ``inflation_rate``.
         """
         cashflow_periods = CASHFLOW_PERIODS[self.frequency]
         # period 0 is the starting period — cashflows apply from period 1 onward
         if period == 0:
             return 0.0
         if cashflow_periods >= periods_per_year:
-            # Cashflow fires more often than simulation steps: bundle multiple
-            # payments into each period (e.g. 3 monthly payments per quarter).
             count = cashflow_periods // periods_per_year
         else:
-            # Cashflow fires less often: only apply on the matching boundary.
             cashflow_every = periods_per_year // cashflow_periods
             if period % cashflow_every != 0:
                 return 0.0
             count = 1
 
         if self.mode == CashflowMode.DOLLAR:
-            return self.amount * count * cumulative_inflation
-        elif self.mode == CashflowMode.PCT_PORTFOLIO:
-            return self.amount * count * portfolio_value
-        elif self.mode == CashflowMode.PCT_PORTFOLIO_INFLATION_ADJUSTED:
-            return self.amount * count * portfolio_value
-        return 0.0
+            base = self.amount * count
+            if self.real:
+                base *= cumulative_inflation
+        else:  # PCT_PORTFOLIO
+            base = self.amount * count * portfolio_value
+
+        return _apply_tax(base, self.effective_tax_rate)
 
 
 @dataclass(frozen=True)
@@ -115,9 +123,19 @@ class LumpSum:
     Parameters
     ----------
     amount:
-        Cash flow amount.
+        Cash flow amount.  For withdrawals (``amount < 0``) with
+        ``effective_tax_rate > 0``, this is the **net** (after-tax) amount;
+        the portfolio is drawn down by ``amount / (1 - effective_tax_rate)``.
     at_year:
         Year at which the cash flow occurs (e.g. 5.0 = end of year 5).
+    real:
+        When ``True``, ``amount`` is expressed in today's dollars and is
+        scaled by the simulation's cumulative inflation factor at the time
+        of the event.  Defaults to ``False`` (nominal).
+    effective_tax_rate:
+        Marginal tax rate applied to withdrawals (``amount < 0``).  The
+        portfolio is drawn down by ``|amount| / (1 - rate)``.  Defaults to
+        ``0.0`` (no tax adjustment).
     slots:
         Portfolio slot names that receive this cash flow.  ``None`` (default)
         means all slots receive the cash flow proportionally.
@@ -125,6 +143,8 @@ class LumpSum:
 
     amount: float
     at_year: float
+    real: bool = field(default=False)
+    effective_tax_rate: float = field(default=0.0)
     slots: tuple[str, ...] | None = field(default=None)
 
     def __post_init__(self) -> None:
@@ -138,7 +158,7 @@ class LumpSum:
         portfolio_value: float,
         cumulative_inflation: float,
     ) -> float:
-        """Return the cash flow amount at the given simulation period.
+        """Return the portfolio impact at the given simulation period.
 
         Returns 0.0 for all periods except the one corresponding to ``at_year``.
 
@@ -151,12 +171,32 @@ class LumpSum:
         portfolio_value:
             Current portfolio value (unused for LumpSum).
         cumulative_inflation:
-            Cumulative inflation factor (unused for LumpSum).
+            Cumulative inflation factor supplied by ``WealthSimulation``.
+            Applied when ``real=True``.
         """
         target_period = round(self.at_year * periods_per_year)
-        if period == target_period:
-            return self.amount
-        return 0.0
+        if period != target_period:
+            return 0.0
+        base = self.amount * cumulative_inflation if self.real else self.amount
+        return _apply_tax(base, self.effective_tax_rate)
+
+
+def _apply_tax(amount: float, effective_tax_rate: float) -> float:
+    """Gross up a withdrawal by the effective tax rate.
+
+    Contributions (positive amounts) are returned unchanged — they are
+    assumed to be already specified in post-tax terms.
+
+    Parameters
+    ----------
+    amount:
+        Net cash flow amount (negative = withdrawal).
+    effective_tax_rate:
+        Marginal rate ∈ [0, 1).  If 0.0, no adjustment is made.
+    """
+    if amount < 0.0 and effective_tax_rate > 0.0:
+        return amount / (1.0 - effective_tax_rate)
+    return amount
 
 
 # Union type for cashflow definitions

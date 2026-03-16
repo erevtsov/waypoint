@@ -260,15 +260,11 @@ class WealthSimulation:
         asset_paths = np.empty((n_sims, n_periods + 1, n_assets))
         asset_paths[:, 0, :] = initial_values
 
-        # Inflation factor per period, derived from cashflows that declare one.
-        inflation_rates = {
-            cf.inflation_rate
-            for cf in cashflows
-            if isinstance(cf, PeriodicCashflow) and cf.inflation_rate
-        }
-        avg_inflation = sum(inflation_rates) / len(inflation_rates) if inflation_rates else 0.0
+        # Per-period inflation factor from the simulation's own inflation_rate.
         period_inflation = (
-            (1.0 + avg_inflation) ** (1.0 / periods_per_year) if avg_inflation else 1.0
+            (1.0 + self.inflation_rate) ** (1.0 / periods_per_year)
+            if self.inflation_rate
+            else 1.0
         )
 
         # Pre-resolve slot indices for each cashflow; validate once up-front.

@@ -48,7 +48,6 @@ def test_periods_per_year_str_lookup() -> None:
 def test_cashflow_mode_str_equality() -> None:
     assert CashflowMode.DOLLAR == "dollar"
     assert CashflowMode.PCT_PORTFOLIO == "pct_portfolio"
-    assert CashflowMode.PCT_PORTFOLIO_INFLATION_ADJUSTED == "pct_portfolio_inflation_adjusted"
 
 
 def test_cashflow_mode_from_string() -> None:

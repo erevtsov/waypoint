@@ -26,7 +26,6 @@ class CashflowMode(StrEnum):
 
     DOLLAR = "dollar"
     PCT_PORTFOLIO = "pct_portfolio"
-    PCT_PORTFOLIO_INFLATION_ADJUSTED = "pct_portfolio_inflation_adjusted"
 
 
 # ---------------------------------------------------------------------------
