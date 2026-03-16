@@ -8,7 +8,7 @@ import numpy as np
 import polars as pl
 
 from waypoint.analysis.expected_return import ExpectedReturn
-from waypoint.analysis.methods.returns import HistoricalMean
+from waypoint.analysis.methods.returns import ArithmeticMean
 from waypoint.analysis.methods.risk import SampleCovariance
 from waypoint.analysis.optimizer import EfficientFrontierResult, Optimizer
 from waypoint.analysis.risk import Risk
@@ -48,7 +48,7 @@ def _make_portfolio() -> Portfolio:
 
 def _make_optimizer() -> Optimizer:
     return Optimizer(
-        return_model=ExpectedReturn(method=HistoricalMean()),
+        return_model=ExpectedReturn(method=ArithmeticMean()),
         risk_model=Risk(method=SampleCovariance()),
         constraints=[LongOnly(), SumToOne()],
     )

@@ -319,8 +319,11 @@ class WealthSimulation:
                         continue
                     target_vals = asset_paths[:, t, target_indices]  # (n_sims, n_targets)
                     total_target = target_vals.sum(axis=1, keepdims=True)  # (n_sims, 1)
-                    safe_total = np.where(total_target > 0.0, total_target, 1.0)
-                    fractions = target_vals / safe_total
+                    positive = total_target > 0.0  # (n_sims, 1)
+                    safe_total = np.where(positive, total_target, 1.0)
+                    proportional = target_vals / safe_total
+                    equal = np.full(target_vals.shape, 1.0 / len(target_indices))
+                    fractions = np.where(positive, proportional, equal)
                     asset_paths[:, t, target_indices] += amount * fractions
 
         return asset_paths

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from waypoint.asset_def import AssetDef
     from waypoint.assets import Asset, LeveragedAsset
 
-from waypoint.analysis.methods.returns import HistoricalMean
+from waypoint.analysis.methods.returns import GeometricMean
 from waypoint.analysis.methods.risk import SampleCovariance
 from waypoint.enums import PERIODS_PER_YEAR, Frequency
 
@@ -121,7 +121,7 @@ class Portfolio:
         self.name = name
 
         self._expected_return_method: ReturnMethod = (
-            expected_return_method if expected_return_method is not None else HistoricalMean()
+            expected_return_method if expected_return_method is not None else GeometricMean()
         )
         self._risk_method: RiskMethod = (
             risk_method if risk_method is not None else SampleCovariance()

@@ -6,7 +6,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from waypoint.analysis.methods.returns import HistoricalMean
+from waypoint.analysis.methods.returns import ArithmeticMean, GeometricMean
 from waypoint.analysis.methods.risk import SampleCovariance
 from waypoint.assets import Asset
 from waypoint.enums import Frequency
@@ -74,10 +74,10 @@ def test_zero_weight_sum_raises_when_normalizing() -> None:
         Portfolio({"eq": eq}, weights={"eq": 0.0})
 
 
-def test_default_expected_return_method_is_historical_mean() -> None:
+def test_default_expected_return_method_is_geometric_mean() -> None:
     eq = _make_asset("Equities", "SPY")
     p = Portfolio({"eq": eq}, weights={"eq": 1.0})
-    assert isinstance(p.expected_return_method, HistoricalMean)
+    assert isinstance(p.expected_return_method, GeometricMean)
 
 
 def test_default_risk_method_is_sample_covariance() -> None:
@@ -89,7 +89,7 @@ def test_default_risk_method_is_sample_covariance() -> None:
 def test_custom_expected_return_method_is_stored() -> None:
     """A custom ReturnMethod passed at construction should be returned by the property."""
     eq = _make_asset("Equities", "SPY")
-    custom = HistoricalMean()
+    custom = ArithmeticMean()
     p = Portfolio({"eq": eq}, weights={"eq": 1.0}, expected_return_method=custom)
     assert p.expected_return_method is custom
 
@@ -106,7 +106,7 @@ def test_expected_return_method_is_mutable() -> None:
     """expected_return_method can be replaced after construction."""
     eq = _make_asset("Equities", "SPY")
     p = Portfolio({"eq": eq}, weights={"eq": 1.0})
-    new_method = HistoricalMean()
+    new_method = ArithmeticMean()
     p.expected_return_method = new_method
     assert p.expected_return_method is new_method
 

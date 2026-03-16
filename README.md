@@ -32,7 +32,7 @@ portfolio = wp.Portfolio(
 )
 
 # --- 2. Expected returns ---------------------------------------------------
-er = wp.analytics.ExpectedReturn(method=wp.returns.HistoricalMean())
+er = wp.analytics.ExpectedReturn(method=wp.returns.ArithmeticMean())
 result = er.compute(portfolio, start="2015-01-01", end="2024-12-31", frequency="monthly")
 print(result.portfolio)          # annualised portfolio return
 
@@ -160,7 +160,7 @@ port_returns = portfolio.portfolio_returns(frequency="monthly")
 **Configurable estimation methods** — analytics that need return/risk estimates (e.g. `WealthSimulation`) use the portfolio's configured methods:
 
 ```python
-portfolio.expected_return_method = wp.returns.HistoricalMean()
+portfolio.expected_return_method = wp.returns.ArithmeticMean()
 portfolio.risk_method = wp.risk.SampleCovariance()
 ```
 
@@ -171,13 +171,13 @@ All analytics live under `wp.analytics` and follow the same pattern: construct w
 #### Expected returns — `wp.analytics.ExpectedReturn`
 
 ```python
-er = wp.analytics.ExpectedReturn(method=wp.returns.HistoricalMean())
+er = wp.analytics.ExpectedReturn(method=wp.returns.ArithmeticMean())
 result = er.compute(portfolio, start="2015-01-01", end="2024-12-31", frequency="monthly")
 result.per_asset    # dict[str, float] — annualised per-asset returns
 result.portfolio    # float — weighted portfolio return
 ```
 
-Methods (`wp.returns`): `HistoricalMean`, `ViewReturn`
+Methods (`wp.returns`): `ArithmeticMean`, `ViewReturn`
 
 `ViewReturn` — forward-looking expected returns specified directly, ignoring history:
 

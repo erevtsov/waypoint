@@ -1,4 +1,4 @@
-"""Tests for ExpectedReturn and HistoricalMean."""
+"""Tests for ExpectedReturn and ArithmeticMean."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import polars as pl
 import pytest
 
 from waypoint.analysis.expected_return import ExpectedReturn, ExpectedReturnResult
-from waypoint.analysis.methods.returns import HistoricalMean, ViewReturn
+from waypoint.analysis.methods.returns import ArithmeticMean, EWMAMean, GeometricMean, ViewReturn
 from waypoint.assets import Asset
 from waypoint.portfolio import Portfolio
 
@@ -37,15 +37,15 @@ def _make_portfolio(
 
 
 # ---------------------------------------------------------------------------
-# HistoricalMean
+# ArithmeticMean
 # ---------------------------------------------------------------------------
 
 def test_historical_mean_value() -> None:
-    """HistoricalMean should return sample mean * periods_per_year."""
+    """ArithmeticMean should return sample mean * periods_per_year."""
     rng = np.random.default_rng(seed=42)
     values = rng.normal(0.001, 0.01, 500).tolist()
     series = pl.Series("returns", values)
-    method = HistoricalMean()
+    method = ArithmeticMean()
     result = method.compute(series, periods_per_year=252)
     expected = float(series.mean()) * 252  # type: ignore[arg-type]
     assert abs(result - expected) < 1e-10
@@ -55,7 +55,7 @@ def test_historical_mean_monthly() -> None:
     """Annualised mean changes with periods_per_year."""
     values = [0.01] * 12  # 1% per month
     series = pl.Series("returns", values)
-    method = HistoricalMean()
+    method = ArithmeticMean()
     result = method.compute(series, periods_per_year=12)
     assert abs(result - 0.12) < 1e-10  # 12% annualised
 
@@ -63,7 +63,7 @@ def test_historical_mean_monthly() -> None:
 def test_historical_mean_empty_returns_zero() -> None:
     """Empty series returns 0.0 without error."""
     series = pl.Series("returns", [], dtype=pl.Float64)
-    method = HistoricalMean()
+    method = ArithmeticMean()
     result = method.compute(series, periods_per_year=252)
     assert result == 0.0
 
@@ -73,9 +73,9 @@ def test_historical_mean_empty_returns_zero() -> None:
 # ---------------------------------------------------------------------------
 
 def test_expected_return_per_asset_values() -> None:
-    """Per-asset values should match calling HistoricalMean directly."""
+    """Per-asset values should match calling ArithmeticMean directly."""
     portfolio = _make_portfolio()
-    method = HistoricalMean()
+    method = ArithmeticMean()
     er = ExpectedReturn(method=method)
     result = er.compute(portfolio, start=None, end=None, frequency="daily")
 
@@ -88,7 +88,7 @@ def test_expected_return_per_asset_values() -> None:
 def test_expected_return_portfolio_is_weighted_sum() -> None:
     """Portfolio expected return must equal weighted sum of per-asset values."""
     portfolio = _make_portfolio(w_eq=0.6, w_fi=0.4)
-    er = ExpectedReturn(method=HistoricalMean())
+    er = ExpectedReturn(method=ArithmeticMean())
     result = er.compute(portfolio, start=None, end=None, frequency="daily")
 
     expected_portfolio = (
@@ -99,9 +99,9 @@ def test_expected_return_portfolio_is_weighted_sum() -> None:
 
 def test_expected_return_method_name() -> None:
     """method_name should reflect the class name of the method used."""
-    er = ExpectedReturn(method=HistoricalMean())
+    er = ExpectedReturn(method=ArithmeticMean())
     result = er.compute(_make_portfolio(), start=None, end=None, frequency="daily")
-    assert result.method_name == "HistoricalMean"
+    assert result.method_name == "ArithmeticMean"
 
 
 def test_expected_return_result_is_frozen() -> None:
@@ -114,7 +114,7 @@ def test_expected_return_result_is_frozen() -> None:
 def test_expected_return_date_filter_respected() -> None:
     """Passing start/end should filter the data used for estimation."""
     portfolio = _make_portfolio()
-    er = ExpectedReturn(method=HistoricalMean())
+    er = ExpectedReturn(method=ArithmeticMean())
     full = er.compute(portfolio, start=None, end=None, frequency="daily")
     filtered = er.compute(
         portfolio,
@@ -126,6 +126,92 @@ def test_expected_return_date_filter_respected() -> None:
     # We only assert both are finite floats
     assert isinstance(full.portfolio, float)
     assert isinstance(filtered.portfolio, float)
+
+
+# ---------------------------------------------------------------------------
+# GeometricMean
+# ---------------------------------------------------------------------------
+
+def test_geometric_mean_constant_returns() -> None:
+    """With constant returns r, geometric mean = (1+r)^ppy - 1 exactly."""
+    r = 0.001  # 0.1% per period
+    series = pl.Series("returns", [r] * 252)
+    result = GeometricMean().compute(series, periods_per_year=252)
+    expected = (1 + r) ** 252 - 1.0
+    assert abs(result - expected) < 1e-10
+
+
+def test_geometric_mean_shows_volatility_drag() -> None:
+    """Volatility drag: alternating +10%/-10% has zero arithmetic mean but negative geometric."""
+    # mean(r) = 0 but each round-trip loses: 1.1 × 0.9 = 0.99 < 1
+    values = [0.1, -0.1] * 100  # 200 periods
+    series = pl.Series("returns", values)
+    geo = GeometricMean().compute(series, periods_per_year=252)
+    arith = ArithmeticMean().compute(series, periods_per_year=252)
+    assert abs(arith) < 1e-10  # arithmetic annualised ≈ 0
+    assert geo < 0.0  # geometric annualised is negative due to volatility drag
+
+
+def test_geometric_mean_empty_returns_zero() -> None:
+    series = pl.Series("returns", [], dtype=pl.Float64)
+    assert GeometricMean().compute(series, periods_per_year=252) == 0.0
+
+
+def test_geometric_mean_via_expected_return_analytic() -> None:
+    """GeometricMean integrates with ExpectedReturn without error."""
+    portfolio = _make_portfolio()
+    result = ExpectedReturn(method=GeometricMean()).compute(
+        portfolio, start=None, end=None, frequency="daily"
+    )
+    assert isinstance(result.portfolio, float)
+    assert result.method_name == "GeometricMean"
+
+
+# ---------------------------------------------------------------------------
+# EWMAMean
+# ---------------------------------------------------------------------------
+
+def test_ewma_mean_decay_near_one_equals_arithmetic() -> None:
+    """With decay_factor ≈ 1 the EWMA approaches the arithmetic mean."""
+    rng = np.random.default_rng(seed=3)
+    values = rng.normal(0.001, 0.01, 1000).tolist()
+    series = pl.Series("returns", values)
+    ewma = EWMAMean(decay_factor=0.9999).compute(series, periods_per_year=252)
+    arith = ArithmeticMean().compute(series, periods_per_year=252)
+    assert abs(ewma - arith) < 1e-3
+
+
+def test_ewma_mean_low_decay_weights_recent() -> None:
+    """Lower decay_factor must weight recent observations more than high decay_factor."""
+    # Series that starts low and ends high
+    values = [0.0] * 200 + [0.01] * 50
+    series = pl.Series("returns", values)
+    ewma_low = EWMAMean(decay_factor=0.5).compute(series, periods_per_year=252)
+    ewma_high = EWMAMean(decay_factor=0.999).compute(series, periods_per_year=252)
+    # Low decay heavily favours the recent high-return block
+    assert ewma_low > ewma_high
+
+
+def test_ewma_mean_single_observation() -> None:
+    """Single observation: result is that value × ppy regardless of decay_factor."""
+    series = pl.Series("returns", [0.002])
+    result = EWMAMean(decay_factor=0.94).compute(series, periods_per_year=252)
+    assert abs(result - 0.002 * 252) < 1e-10
+
+
+def test_ewma_mean_empty_returns_zero() -> None:
+    series = pl.Series("returns", [], dtype=pl.Float64)
+    assert EWMAMean(decay_factor=0.94).compute(series, periods_per_year=252) == 0.0
+
+
+def test_ewma_mean_via_expected_return_analytic() -> None:
+    """EWMAMean integrates with ExpectedReturn without error."""
+    portfolio = _make_portfolio()
+    result = ExpectedReturn(method=EWMAMean(decay_factor=0.94)).compute(
+        portfolio, start=None, end=None, frequency="daily"
+    )
+    assert isinstance(result.portfolio, float)
+    assert result.method_name == "EWMAMean"
 
 
 # ---------------------------------------------------------------------------

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+import numpy as np
 import polars as pl
 
 if TYPE_CHECKING:
@@ -34,7 +35,7 @@ class ReturnMethod(Protocol):
 
 
 @dataclass(frozen=True)
-class HistoricalMean:
+class ArithmeticMean:
     """Arithmetic annualised mean of historical returns.
 
     Expected return = sample mean of periodic returns * periods_per_year.
@@ -47,6 +48,59 @@ class HistoricalMean:
             return 0.0
         # cast through int conversion path to satisfy strict mypy typing
         return float(mean) * periods_per_year  # type: ignore[arg-type]
+
+
+@dataclass(frozen=True)
+class GeometricMean:
+    """Geometric (compounded) annualised mean of historical returns.
+
+    Computes ``exp(mean(log(1 + r)) × ppy) − 1``, which equals the
+    constant per-period return that would produce the same terminal wealth
+    as the historical return sequence.  Preferred over ``ArithmeticMean``
+    for long-horizon simulations because the arithmetic mean overstates
+    expected compound growth by approximately ½σ².
+    """
+
+    def compute(self, returns: pl.Series, periods_per_year: int) -> float:
+        """Return the geometric annualised mean."""
+        values = returns.drop_nulls().to_numpy()
+        if len(values) == 0:
+            return 0.0
+        return float(np.exp(np.mean(np.log1p(values)) * periods_per_year) - 1.0)
+
+
+@dataclass(frozen=True)
+class EWMAMean:
+    """Exponentially weighted annualised mean of historical returns.
+
+    Assigns geometrically decaying weights to past observations so that
+    recent returns receive more weight.  Useful when you believe recent
+    market regimes are more informative than older ones.
+
+    The weight assigned to an observation ``k`` periods in the past is
+    proportional to ``decay_factor ** k``.  Weights are normalised to
+    sum to 1 before computing the mean.
+
+    Parameters
+    ----------
+    decay_factor:
+        Per-period decay rate λ ∈ (0, 1).  Higher values retain more
+        history; lower values react faster to recent observations.
+        Common choices: 0.94 (RiskMetrics daily), 0.97 (RiskMetrics monthly).
+    """
+
+    decay_factor: float = field(default=0.94)
+
+    def compute(self, returns: pl.Series, periods_per_year: int) -> float:
+        """Return the EWMA annualised mean."""
+        values = returns.drop_nulls().to_numpy()
+        n = len(values)
+        if n == 0:
+            return 0.0
+        # Oldest observation has the lowest weight; most recent = 1.
+        weights = self.decay_factor ** np.arange(n - 1, -1, -1, dtype=np.float64)
+        weights /= weights.sum()
+        return float(np.dot(weights, values)) * periods_per_year
 
 
 @dataclass(frozen=True)
