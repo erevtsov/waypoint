@@ -14,7 +14,9 @@ from waypoint.analysis.methods.returns import (
     ArithmeticMean,
     EWMAMean,
     GeometricMean,
+    ShrinkageTowardGrandMean,
     ViewReturn,
+    _james_stein_alpha,
 )
 from waypoint.assets import Asset
 from waypoint.portfolio import Portfolio
@@ -402,3 +404,143 @@ def test_capm_method_name() -> None:
         portfolio, start=None, end=None, frequency="daily"
     )
     assert result.method_name == "CAPM"
+
+
+# ---------------------------------------------------------------------------
+# ShrinkageTowardGrandMean / _james_stein_alpha
+# ---------------------------------------------------------------------------
+
+def _make_wide(means: list[float], n: int = 200, seed: int = 7) -> pl.DataFrame:
+    """Build a wide DataFrame with one column per mean, plus a date column."""
+    rng = np.random.default_rng(seed=seed)
+    dates = [date(2018, 1, 1) + timedelta(days=i) for i in range(n)]
+    data: dict[str, object] = {"date": dates}
+    for i, m in enumerate(means):
+        data[f"A{i}"] = rng.normal(m, 0.01, n).tolist()
+    return pl.DataFrame(data)
+
+
+def test_shrinkage_alpha_zero_no_shrinkage() -> None:
+    """alpha=0 must return raw arithmetic means unchanged."""
+    portfolio = _make_portfolio()
+    method = ShrinkageTowardGrandMean(alpha=0.0)
+    result = ExpectedReturn(method=method).compute(
+        portfolio, start=None, end=None, frequency="daily"
+    )
+    raw = ArithmeticMean()
+    wide = portfolio.get_returns()
+    for name in ["Equities", "Bonds"]:
+        assert abs(result.per_asset[name] - raw.compute(wide[name], 252)) < 1e-10
+
+
+def test_shrinkage_alpha_one_collapses_to_grand_mean() -> None:
+    """alpha=1 must give every asset the same grand mean."""
+    portfolio = _make_portfolio()
+    method = ShrinkageTowardGrandMean(alpha=1.0)
+    result = ExpectedReturn(method=method).compute(
+        portfolio, start=None, end=None, frequency="daily"
+    )
+    eq = result.per_asset["Equities"]
+    bd = result.per_asset["Bonds"]
+    assert abs(eq - bd) < 1e-10
+
+
+def test_shrinkage_pulls_extremes_toward_center() -> None:
+    """With 0 < alpha < 1 the shrunk spread must be smaller than the raw spread."""
+    portfolio = _make_portfolio(eq_mean=0.001, fi_mean=0.0001)
+    raw = ArithmeticMean()
+    wide = portfolio.get_returns()
+    raw_spread = abs(
+        raw.compute(wide["Equities"], 252) - raw.compute(wide["Bonds"], 252)
+    )
+    result = ExpectedReturn(method=ShrinkageTowardGrandMean(alpha=0.4)).compute(
+        portfolio, start=None, end=None, frequency="daily"
+    )
+    shrunk_spread = abs(result.per_asset["Equities"] - result.per_asset["Bonds"])
+    assert shrunk_spread < raw_spread
+
+
+def test_james_stein_alpha_two_assets_returns_zero() -> None:
+    """James-Stein is undefined for k ≤ 2; helper must return 0.0."""
+    wide = _make_wide([0.001, 0.002])
+    alpha = _james_stein_alpha(wide, ["A0", "A1"])
+    assert alpha == 0.0
+
+
+def test_james_stein_alpha_equal_means_returns_zero() -> None:
+    """When all means are equal there is no spread to shrink toward; alpha must be 0."""
+    n = 200
+    dates = [date(2018, 1, 1) + timedelta(days=i) for i in range(n)]
+    wide_flat = pl.DataFrame({
+        "date": dates,
+        "A0": [0.001] * n,
+        "A1": [0.001] * n,
+        "A2": [0.001] * n,
+    })
+    alpha = _james_stein_alpha(wide_flat, ["A0", "A1", "A2"])
+    assert alpha == 0.0
+
+
+def test_james_stein_alpha_in_unit_interval() -> None:
+    """Analytical alpha must always be in [0, 1]."""
+    wide = _make_wide([0.0002, 0.0008, 0.0015, 0.0003])
+    alpha = _james_stein_alpha(wide, ["A0", "A1", "A2", "A3"])
+    assert 0.0 <= alpha <= 1.0
+
+
+def test_shrinkage_analytical_default_shrinks_extremes() -> None:
+    """Analytical default alpha should still shrink extreme means toward center."""
+    portfolio = _make_portfolio(eq_mean=0.002, fi_mean=0.0001)
+    raw = ArithmeticMean()
+    wide = portfolio.get_returns()
+    raw_spread = abs(
+        raw.compute(wide["Equities"], 252) - raw.compute(wide["Bonds"], 252)
+    )
+    result = ExpectedReturn(method=ShrinkageTowardGrandMean()).compute(
+        portfolio, start=None, end=None, frequency="daily"
+    )
+    # k=2 → analytical alpha=0, so no shrinkage — verify raw means are returned
+    for name in ["Equities", "Bonds"]:
+        assert abs(result.per_asset[name] - raw.compute(wide[name], 252)) < 1e-10
+    # Confirm spread is unchanged (alpha=0 for k=2)
+    shrunk_spread = abs(result.per_asset["Equities"] - result.per_asset["Bonds"])
+    assert abs(shrunk_spread - raw_spread) < 1e-10
+
+
+def test_shrinkage_analytical_three_assets() -> None:
+    """With k=3 analytical alpha should be > 0, producing some shrinkage."""
+    rng = np.random.default_rng(seed=11)
+    n = 300
+    dates = [date(2018, 1, 1) + timedelta(days=i) for i in range(n)]
+    assets = {
+        f"A{i}": Asset(
+            name=f"A{i}", ticker=f"A{i}",
+            returns=pl.DataFrame({
+                "date": dates,
+                "returns": rng.normal(m, 0.01, n).tolist(),
+            }),
+            frequency="daily",
+        )
+        for i, m in enumerate([0.0002, 0.0008, 0.0020])
+    }
+    portfolio = Portfolio(assets, weights={k: 1 / 3 for k in assets})
+    raw = ArithmeticMean()
+    wide = portfolio.get_returns()
+    raw_means = {name: raw.compute(wide[name], 252) for name in assets}
+    raw_spread = max(raw_means.values()) - min(raw_means.values())
+
+    result = ExpectedReturn(method=ShrinkageTowardGrandMean()).compute(
+        portfolio, start=None, end=None, frequency="daily"
+    )
+    shrunk_spread = (
+        max(result.per_asset.values()) - min(result.per_asset.values())
+    )
+    assert shrunk_spread < raw_spread
+
+
+def test_shrinkage_method_name() -> None:
+    portfolio = _make_portfolio()
+    result = ExpectedReturn(method=ShrinkageTowardGrandMean(alpha=0.2)).compute(
+        portfolio, start=None, end=None, frequency="daily"
+    )
+    assert result.method_name == "ShrinkageTowardGrandMean"

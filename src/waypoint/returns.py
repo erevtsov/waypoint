@@ -6,6 +6,7 @@ from waypoint.analysis.methods.returns import (
     EWMAMean,
     GeometricMean,
     PortfolioReturnMethod,
+    ShrinkageTowardGrandMean,
     ViewReturn,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "EWMAMean",
     "GeometricMean",
     "PortfolioReturnMethod",
+    "ShrinkageTowardGrandMean",
     "ViewReturn",
 ]

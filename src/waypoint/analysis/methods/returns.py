@@ -329,3 +329,114 @@ class CAPM:
             )
 
         return per_asset
+
+
+def _james_stein_alpha(wide: pl.DataFrame, asset_cols: list[str]) -> float:
+    """Compute the analytical James-Stein shrinkage intensity toward the grand mean.
+
+    Derived from the positive-part James-Stein estimator.  The shrinkage
+    intensity α* is the ratio of the mean estimator's noise variance to the
+    observed spread of per-asset means, scaled by the degrees-of-freedom
+    correction ``(k − 2)``.
+
+    Parameters
+    ----------
+    wide:
+        Wide DataFrame with one column per asset (per-period decimal returns).
+    asset_cols:
+        Names of the asset columns in ``wide``.
+
+    Returns
+    -------
+    float
+        α* ∈ [0, 1]; 0.0 when ``k ≤ 2`` or all means are equal.
+    """
+    k = len(asset_cols)
+    if k <= 2:
+        return 0.0
+
+    arrays = [wide[col].drop_nulls().to_numpy() for col in asset_cols]
+    t = min(len(a) for a in arrays)
+    if t == 0:
+        return 0.0
+
+    per_period_means = np.array([np.mean(a) for a in arrays])
+    per_period_vars = np.array([np.var(a, ddof=1) for a in arrays])
+
+    grand_mean = float(np.mean(per_period_means))
+    spread = float(np.sum((per_period_means - grand_mean) ** 2))
+    if spread == 0.0:
+        return 0.0
+
+    # Variance of the sample mean estimator, pooled across assets.
+    noise_var = float(np.mean(per_period_vars)) / t
+    return float(np.clip((k - 2) * noise_var / spread, 0.0, 1.0))
+
+
+@dataclass(frozen=True)
+class ShrinkageTowardGrandMean:
+    """James-Stein shrinkage of per-asset means toward the cross-sectional grand mean.
+
+    Reduces estimation error by pulling extreme per-asset means toward the
+    average mean across all portfolio assets.  Useful when sample means are
+    noisy and you want to dampen the optimizer's tendency to over-bet on
+    assets with historically high (but possibly lucky) returns.
+
+    The shrunk estimate for asset ``i`` is:
+
+        μ̂_i = (1 − α) × μ_i  +  α × μ_grand
+
+    where ``μ_grand = mean(μ_i)`` across all assets.
+
+    Parameters
+    ----------
+    alpha:
+        Shrinkage intensity α ∈ [0, 1].  ``None`` (default) uses the
+        analytical James-Stein estimate derived from the data.  Pass an
+        explicit value to override (e.g. ``alpha=0.3`` for 30% shrinkage).
+        ``alpha=0`` disables shrinkage; ``alpha=1`` collapses all assets to
+        the grand mean.
+    """
+
+    _portfolio_level: ClassVar[Literal[True]] = True
+
+    alpha: float | None = field(default=None)
+
+    def compute(
+        self,
+        wide: pl.DataFrame,
+        weights: dict[str, float],
+        periods_per_year: int,
+    ) -> dict[str, float]:
+        """Return James-Stein shrunk annualised expected returns for each asset.
+
+        Parameters
+        ----------
+        wide:
+            Wide DataFrame with a ``"date"`` column and one column per asset.
+        weights:
+            Portfolio weights (not used by shrinkage; present to satisfy protocol).
+        periods_per_year:
+            Used to annualise the raw arithmetic means before shrinkage.
+
+        Returns
+        -------
+        dict[str, float]
+            Mapping of asset name to annualised shrunk expected return.
+        """
+        asset_cols = [c for c in wide.columns if c != "date"]
+
+        arrays = {col: wide[col].drop_nulls().to_numpy() for col in asset_cols}
+        raw_means = {col: float(np.mean(a)) * periods_per_year for col, a in arrays.items()}
+
+        alpha = (
+            self.alpha
+            if self.alpha is not None
+            else _james_stein_alpha(wide, asset_cols)
+        )
+        grand_mean = sum(raw_means.values()) / len(raw_means)
+
+        return {
+            col: (1.0 - alpha) * raw_means[col] + alpha * grand_mean
+            for col in asset_cols
+        }
