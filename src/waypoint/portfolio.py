@@ -9,9 +9,13 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 if TYPE_CHECKING:
+    from waypoint.analysis.methods.returns import ReturnMethod
+    from waypoint.analysis.methods.risk import RiskMethod
     from waypoint.asset_def import AssetDef
     from waypoint.assets import Asset, LeveragedAsset
 
+from waypoint.analysis.methods.returns import HistoricalMean
+from waypoint.analysis.methods.risk import SampleCovariance
 from waypoint.enums import PERIODS_PER_YEAR, Frequency
 
 # Sentinel used as cache key when no date range is specified
@@ -91,6 +95,8 @@ class Portfolio:
         weights: dict[str, float],
         name: str = "",
         normalize_weights: bool = True,
+        expected_return_method: ReturnMethod | None = None,
+        risk_method: RiskMethod | None = None,
     ) -> None:
         if slots.keys() != weights.keys():
             raise ValueError(
@@ -114,6 +120,13 @@ class Portfolio:
         self._slots: dict[str, Asset | LeveragedAsset | AssetDef] = dict(slots)
         self.name = name
 
+        self._expected_return_method: ReturnMethod = (
+            expected_return_method if expected_return_method is not None else HistoricalMean()
+        )
+        self._risk_method: RiskMethod = (
+            risk_method if risk_method is not None else SampleCovariance()
+        )
+
         # Mutable cache: keyed by (start, end, frequency) -> wide pl.DataFrame
         self._cache: dict[tuple[date, date, Frequency | None], pl.DataFrame] = {}
 
@@ -135,6 +148,24 @@ class Portfolio:
     def names(self) -> list[str]:
         """Ordered list of slot names."""
         return list(self._slots)
+
+    @property
+    def expected_return_method(self) -> ReturnMethod:
+        """Method used to estimate expected returns for this portfolio."""
+        return self._expected_return_method
+
+    @expected_return_method.setter
+    def expected_return_method(self, method: ReturnMethod) -> None:
+        self._expected_return_method = method
+
+    @property
+    def risk_method(self) -> RiskMethod:
+        """Method used to estimate covariance / risk for this portfolio."""
+        return self._risk_method
+
+    @risk_method.setter
+    def risk_method(self, method: RiskMethod) -> None:
+        self._risk_method = method
 
     @property
     def native_frequency(self) -> Frequency:

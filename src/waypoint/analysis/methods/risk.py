@@ -42,5 +42,7 @@ class SampleCovariance:
     def compute(self, returns_df: pl.DataFrame, periods_per_year: int) -> np.ndarray:
         """Return annualised sample covariance matrix."""
         data = returns_df.to_numpy()
-        cov: np.ndarray = np.cov(data, rowvar=False) * periods_per_year
+        # np.cov returns a 0-D scalar for a single asset; atleast_2d ensures
+        # the result always has shape (n_assets, n_assets) per the protocol contract.
+        cov: np.ndarray = np.atleast_2d(np.cov(data, rowvar=False)) * periods_per_year
         return cov

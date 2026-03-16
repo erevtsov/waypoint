@@ -6,6 +6,8 @@ import numpy as np
 import polars as pl
 import pytest
 
+from waypoint.analysis.methods.returns import HistoricalMean
+from waypoint.analysis.methods.risk import SampleCovariance
 from waypoint.assets import Asset
 from waypoint.enums import Frequency
 from waypoint.portfolio import Portfolio
@@ -70,6 +72,52 @@ def test_zero_weight_sum_raises_when_normalizing() -> None:
     eq = _make_asset("Equities", "SPY")
     with pytest.raises(ValueError, match="sum to zero"):
         Portfolio({"eq": eq}, weights={"eq": 0.0})
+
+
+def test_default_expected_return_method_is_historical_mean() -> None:
+    eq = _make_asset("Equities", "SPY")
+    p = Portfolio({"eq": eq}, weights={"eq": 1.0})
+    assert isinstance(p.expected_return_method, HistoricalMean)
+
+
+def test_default_risk_method_is_sample_covariance() -> None:
+    eq = _make_asset("Equities", "SPY")
+    p = Portfolio({"eq": eq}, weights={"eq": 1.0})
+    assert isinstance(p.risk_method, SampleCovariance)
+
+
+def test_custom_expected_return_method_is_stored() -> None:
+    """A custom ReturnMethod passed at construction should be returned by the property."""
+    eq = _make_asset("Equities", "SPY")
+    custom = HistoricalMean()
+    p = Portfolio({"eq": eq}, weights={"eq": 1.0}, expected_return_method=custom)
+    assert p.expected_return_method is custom
+
+
+def test_custom_risk_method_is_stored() -> None:
+    """A custom RiskMethod passed at construction should be returned by the property."""
+    eq = _make_asset("Equities", "SPY")
+    custom = SampleCovariance()
+    p = Portfolio({"eq": eq}, weights={"eq": 1.0}, risk_method=custom)
+    assert p.risk_method is custom
+
+
+def test_expected_return_method_is_mutable() -> None:
+    """expected_return_method can be replaced after construction."""
+    eq = _make_asset("Equities", "SPY")
+    p = Portfolio({"eq": eq}, weights={"eq": 1.0})
+    new_method = HistoricalMean()
+    p.expected_return_method = new_method
+    assert p.expected_return_method is new_method
+
+
+def test_risk_method_is_mutable() -> None:
+    """risk_method can be replaced after construction."""
+    eq = _make_asset("Equities", "SPY")
+    p = Portfolio({"eq": eq}, weights={"eq": 1.0})
+    new_method = SampleCovariance()
+    p.risk_method = new_method
+    assert p.risk_method is new_method
 
 
 def test_normalize_weights_false_preserves_weights() -> None:

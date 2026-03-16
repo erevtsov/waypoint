@@ -13,7 +13,9 @@ import polars as pl
 if TYPE_CHECKING:
     from waypoint.portfolio import Portfolio
 
+from waypoint.analysis.expected_return import ExpectedReturn
 from waypoint.analysis.methods.simulation import SimulationMethod
+from waypoint.analysis.risk import Risk
 from waypoint.cashflows import CashflowDefinition
 from waypoint.enums import PERIODS_PER_YEAR, Frequency
 
@@ -136,15 +138,21 @@ class WealthSimulation:
         """
         freq = Frequency(frequency)
         periods_per_year = PERIODS_PER_YEAR[freq]
-        port_returns_df = portfolio.portfolio_returns(start, end, frequency=freq)
-        hist_returns: np.ndarray = port_returns_df["returns"].to_numpy()
 
-        # Estimate mu and sigma from historical portfolio returns
-        mu_scalar = float(np.mean(hist_returns))
-        sigma_scalar = float(np.var(hist_returns, ddof=1))
+        # Estimate annualised mu and sigma via portfolio's configured methods,
+        # then convert to per-period quantities for the simulation engine.
+        er_result = ExpectedReturn(method=portfolio.expected_return_method).compute(
+            portfolio, start, end, frequency=freq
+        )
+        risk_result = Risk(method=portfolio.risk_method).compute(
+            portfolio, start, end, frequency=freq
+        )
 
-        mu = np.array([mu_scalar])
-        sigma = np.array([[sigma_scalar]])
+        mu_per_period = er_result.portfolio / periods_per_year
+        variance_per_period = risk_result.portfolio_volatility**2 / periods_per_year
+
+        mu = np.array([mu_per_period])
+        sigma = np.array([[variance_per_period]])
 
         n_periods = self.horizon_years * periods_per_year
 

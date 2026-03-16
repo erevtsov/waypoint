@@ -57,6 +57,8 @@
 - Asset-first: pass pre-loaded `Asset`s, analytics use the data as-is (no date params required)
 - `portfolio.get_returns(start, end)` — fetches if slots are `AssetDef`, filters if slots are `Asset`; result cached in memory on the Portfolio instance (mutable internal cache, frozen definitions/weights)
 - Weights are normalised to sum to 1.0 on construction
+- `portfolio.expected_return_method` and `portfolio.risk_method` — mutable properties (default `HistoricalMean()` / `SampleCovariance()`); also settable post-construction
+- `native_frequency` — coarsest native frequency across all slots; `get_returns(frequency=X)` raises if `X` is finer than `native_frequency`
 
 ## Analytics design
 - **Two layers**: pure math functions in `analysis/methods/` (no domain objects, just arrays/DataFrames) and analytic orchestrator classes in `analysis/` (extract inputs from Portfolio, call methods/, return Results)
@@ -65,6 +67,8 @@
 - **Visualization**: free functions in `analysis/viz.py` (stateless, fully testable); each Result has a `.plot()` method that delegates to the relevant free function as the default view
 - **Optimizer**: uses cvxpy; `constraints.py` owns the translation from user-friendly objects to cvxpy constraints
 - **Visualization library**: plotly (optional extra); matplotlib is not used
+- **Portfolio method convention**: analytics that need return/risk estimates (e.g. `WealthSimulation`) must read `portfolio.expected_return_method` / `portfolio.risk_method` and pass them to `ExpectedReturn` / `Risk` — never compute `np.mean`/`np.var` inline. Exception: `ExpectedReturn` and `Risk` themselves always use their own explicitly-passed `method` and do not read portfolio properties.
+- **Per-period conversion**: annualised results from `ExpectedReturn`/`Risk` must be converted to per-period before passing to simulation: `mu_per_period = er.portfolio / ppy`, `var_per_period = risk.portfolio_volatility**2 / ppy`
 
 ## Enums
 - Use `StrEnum` for any field with a fixed set of string values (`Frequency`, `CashflowMode`)
