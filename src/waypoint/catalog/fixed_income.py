@@ -32,3 +32,14 @@ CPI_YOY = AssetDef(
     sub_asset_class="Inflation",
     geography="US",
 )
+
+RISK_FREE_RATE = AssetDef(
+    name="3-Month T-Bill Rate",
+    symbol="DTB3",
+    vendor="fred",
+    frequency=Frequency.DAILY,
+    normalization="rate_to_daily",
+    asset_class="Fixed Income",
+    sub_asset_class="Risk-Free Rate",
+    geography="US",
+)

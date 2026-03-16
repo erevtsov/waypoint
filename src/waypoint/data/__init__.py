@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 from waypoint.asset_def import AssetDef
 from waypoint.assets import Asset
 from waypoint.data.cache import load_or_fetch, snap_to_month_boundaries
-from waypoint.data.normalize import to_returns
+from waypoint.data.normalize import rate_to_daily_returns, to_returns
 from waypoint.data.providers import get_provider
 from waypoint.enums import Frequency
 from waypoint.indicator_def import IndicatorDef
@@ -117,7 +117,10 @@ def fetch(
         )
         return Indicator.from_indicator_def(instrument, values)
 
-    returns = to_returns(raw_df)
+    if instrument.normalization == "rate_to_daily":
+        returns = rate_to_daily_returns(raw_df)
+    else:
+        returns = to_returns(raw_df)
     return Asset.from_asset_def(instrument, returns)
 
 

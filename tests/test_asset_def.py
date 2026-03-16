@@ -58,3 +58,22 @@ def test_asset_def_accepts_frequency_enum() -> None:
     ad = AssetDef(name="X", symbol="X", vendor="yfinance", frequency=Frequency.MONTHLY)
     assert ad.frequency is Frequency.MONTHLY
     assert ad.frequency == "monthly"  # StrEnum equality
+
+
+def test_asset_def_normalization_defaults_to_pct_change() -> None:
+    ad = AssetDef(name="X", symbol="X", vendor="yfinance", frequency="daily")
+    assert ad.normalization == "pct_change"
+
+
+def test_asset_def_normalization_rate_to_daily() -> None:
+    ad = AssetDef(
+        name="X", symbol="X", vendor="fred", frequency="daily",
+        normalization="rate_to_daily",
+    )
+    assert ad.normalization == "rate_to_daily"
+
+
+def test_asset_def_invalid_normalization() -> None:
+    with pytest.raises(ValueError, match="normalization must be one of"):
+        AssetDef(name="X", symbol="X", vendor="yfinance", frequency="daily",
+                 normalization="log_return")
