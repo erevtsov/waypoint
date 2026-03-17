@@ -15,7 +15,7 @@ US_LARGE_CAP = AssetDef(
 
 US_TOTAL_MARKET = AssetDef(
     name="US Total Market",
-    symbol="^CRSPTM1",
+    symbol="VTI",
     vendor="yfinance",
     frequency=Frequency.DAILY,
     asset_class="Equities",
@@ -24,8 +24,8 @@ US_TOTAL_MARKET = AssetDef(
 )
 
 US_LARGE_CAP_GROWTH = AssetDef(
-    name="US Large Cap Growth",
-    symbol="^CRSPLCG1",
+    name="US Large Cap Growth (VUG)",
+    symbol="VUG",
     vendor="yfinance",
     frequency=Frequency.DAILY,
     asset_class="Equities",
@@ -104,8 +104,8 @@ CHINA_TECH = AssetDef(
 )
 
 US_FINANCIALS = AssetDef(
-    name="Dow Jones US Financials",
-    symbol="^DJUSFN",
+    name="US Financials (XLF)",
+    symbol="XLF",
     vendor="yfinance",
     frequency=Frequency.DAILY,
     asset_class="Equities",
