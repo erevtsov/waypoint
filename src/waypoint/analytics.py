@@ -4,7 +4,12 @@ from waypoint.analysis.compare import ComparisonResult
 from waypoint.analysis.expected_return import ExpectedReturn, ExpectedReturnResult
 from waypoint.analysis.optimizer import EfficientFrontierResult, Optimizer
 from waypoint.analysis.risk import Risk, RiskResult
-from waypoint.analysis.simulation import SimulationResult, WealthSimulation
+from waypoint.analysis.simulation import (
+    MultiWealthSimulation,
+    MultiWealthSimulationResult,
+    SimulationResult,
+    WealthSimulation,
+)
 
 __all__ = [
     "ExpectedReturn",
@@ -15,5 +20,7 @@ __all__ = [
     "EfficientFrontierResult",
     "WealthSimulation",
     "SimulationResult",
+    "MultiWealthSimulation",
+    "MultiWealthSimulationResult",
     "ComparisonResult",
 ]

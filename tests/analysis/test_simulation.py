@@ -8,8 +8,13 @@ import numpy as np
 import polars as pl
 import pytest
 
+from waypoint.aggregate import Aggregate
 from waypoint.analysis.methods.simulation import Bootstrap, MonteCarlo
-from waypoint.analysis.simulation import SimulationResult, WealthSimulation
+from waypoint.analysis.simulation import (
+    MultiWealthSimulation,
+    SimulationResult,
+    WealthSimulation,
+)
 from waypoint.assets import Asset
 from waypoint.cashflows import PeriodicCashflow
 from waypoint.portfolio import Portfolio
@@ -417,3 +422,174 @@ def test_zero_inflation_real_equals_nominal() -> None:
     nominal = sim.compute(portfolio, start=None, end=None, frequency="daily", real=False)
     real = sim.compute(portfolio, start=None, end=None, frequency="daily", real=True)
     np.testing.assert_array_almost_equal(real.paths, nominal.paths)
+
+
+# ---------------------------------------------------------------------------
+# MultiWealthSimulation helpers
+# ---------------------------------------------------------------------------
+
+def _make_zero_return_portfolio(
+    name: str,
+    initial_wealth: float,
+    slot_names: list[str],
+    seed: int = 0,
+) -> Portfolio:
+    """Portfolio with near-zero returns for deterministic testing."""
+    n = 300
+    assets = {}
+    weights = {}
+    for i, sn in enumerate(slot_names):
+        dates = [date(2010, 1, 1) + timedelta(days=j) for j in range(n)]
+        returns = pl.DataFrame({"date": dates, "returns": [0.0] * n})
+        assets[sn] = Asset(
+            name=sn, ticker=sn.upper(),
+            returns=returns, frequency="daily",
+        )
+        weights[sn] = 1.0 / len(slot_names)
+    return Portfolio(assets, weights=weights, name=name, initial_wealth=initial_wealth)
+
+
+def _make_aggregate() -> Aggregate:
+    eq = Asset(
+        name="EQ", ticker="EQ",
+        returns=pl.DataFrame({
+            "date": [date(2010, 1, 1) + timedelta(days=i) for i in range(300)],
+            "returns": np.random.default_rng(1).normal(0.001, 0.01, 300).tolist(),
+        }),
+        frequency="daily",
+    )
+    fi = Asset(
+        name="FI", ticker="FI",
+        returns=pl.DataFrame({
+            "date": [date(2010, 1, 1) + timedelta(days=i) for i in range(300)],
+            "returns": np.random.default_rng(2).normal(0.0003, 0.003, 300).tolist(),
+        }),
+        frequency="daily",
+    )
+    taxable = Portfolio(
+        {"EQ": eq, "FI": fi}, weights={"EQ": 0.7, "FI": 0.3},
+        name="taxable", initial_wealth=600_000.0,
+    )
+    retirement = Portfolio(
+        {"EQ": eq, "FI": fi}, weights={"EQ": 0.6, "FI": 0.4},
+        name="401k", initial_wealth=400_000.0,
+    )
+    return Aggregate([taxable, retirement])
+
+
+# ---------------------------------------------------------------------------
+# MultiWealthSimulation — structure
+# ---------------------------------------------------------------------------
+
+def test_multi_result_has_all_accounts() -> None:
+    agg = _make_aggregate()
+    sim = MultiWealthSimulation(method=MonteCarlo(seed=42), horizon_years=5, n_simulations=50)
+    result = sim.compute(agg, start=None, end=None, frequency="monthly")
+    assert set(result.accounts.keys()) == {"taxable", "401k"}
+
+
+def test_multi_result_total_paths_shape() -> None:
+    agg = _make_aggregate()
+    sim = MultiWealthSimulation(method=MonteCarlo(seed=42), horizon_years=5, n_simulations=50)
+    result = sim.compute(agg, start=None, end=None, frequency="monthly")
+    expected_cols = 5 * 12 + 1  # 5 years * 12 months + t=0
+    assert result.total.paths.shape == (50, expected_cols)
+
+
+def test_multi_result_account_paths_shape() -> None:
+    agg = _make_aggregate()
+    sim = MultiWealthSimulation(method=MonteCarlo(seed=42), horizon_years=5, n_simulations=50)
+    result = sim.compute(agg, start=None, end=None, frequency="monthly")
+    expected_cols = 5 * 12 + 1
+    for acct_result in result.accounts.values():
+        assert acct_result.paths.shape == (50, expected_cols)
+
+
+def test_multi_total_initial_wealth_is_sum() -> None:
+    """Total wealth at t=0 must equal sum of account initial wealths."""
+    agg = _make_aggregate()
+    sim = MultiWealthSimulation(method=MonteCarlo(seed=42), horizon_years=5, n_simulations=50)
+    result = sim.compute(agg, start=None, end=None, frequency="monthly")
+    np.testing.assert_allclose(result.total.paths[:, 0], 1_000_000.0, rtol=1e-6)
+
+
+def test_multi_account_initial_wealth_correct() -> None:
+    """Each account's t=0 wealth must match its initial_wealth."""
+    agg = _make_aggregate()
+    sim = MultiWealthSimulation(method=MonteCarlo(seed=42), horizon_years=5, n_simulations=50)
+    result = sim.compute(agg, start=None, end=None, frequency="monthly")
+    np.testing.assert_allclose(result.accounts["taxable"].paths[:, 0], 600_000.0, rtol=1e-6)
+    np.testing.assert_allclose(result.accounts["401k"].paths[:, 0], 400_000.0, rtol=1e-6)
+
+
+def test_multi_total_equals_sum_of_accounts() -> None:
+    """Total paths must equal the sum of per-account paths at every period."""
+    agg = _make_aggregate()
+    sim = MultiWealthSimulation(method=MonteCarlo(seed=42), horizon_years=5, n_simulations=50)
+    result = sim.compute(agg, start=None, end=None, frequency="monthly")
+    reconstructed = (
+        result.accounts["taxable"].paths + result.accounts["401k"].paths
+    )
+    np.testing.assert_allclose(result.total.paths, reconstructed, rtol=1e-9)
+
+
+def test_multi_total_allocation_dollar_keyed_by_account() -> None:
+    """total.allocation_dollar must be keyed by account name."""
+    agg = _make_aggregate()
+    sim = MultiWealthSimulation(method=MonteCarlo(seed=42), horizon_years=5, n_simulations=50)
+    result = sim.compute(agg, start=None, end=None, frequency="monthly")
+    assert set(result.total.allocation_dollar.keys()) == {"taxable", "401k"}
+
+
+# ---------------------------------------------------------------------------
+# MultiWealthSimulation — cashflows routed per account
+# ---------------------------------------------------------------------------
+
+def test_multi_account_cashflow_only_affects_target_account() -> None:
+    """A cashflow for 'taxable' must not change '401k' balance."""
+    n = 300
+    dates = [date(2010, 1, 1) + timedelta(days=i) for i in range(n)]
+    zero_returns = pl.DataFrame({"date": dates, "returns": [0.0] * n})
+    eq = Asset(name="EQ", ticker="EQ", returns=zero_returns, frequency="daily")
+
+    taxable = Portfolio({"EQ": eq}, weights={"EQ": 1.0}, name="taxable", initial_wealth=500_000.0)
+    retirement = Portfolio(
+        {"EQ": eq}, weights={"EQ": 1.0}, name="401k", initial_wealth=300_000.0
+    )
+    agg = Aggregate([taxable, retirement])
+
+    contribution = PeriodicCashflow(amount=1_000.0, frequency="monthly", mode="dollar")
+    sim = MultiWealthSimulation(
+        method=Bootstrap(
+            historical_returns=np.zeros(300), block_size=5, seed=42
+        ),
+        cashflows={"taxable": [contribution]},
+        horizon_years=2,
+        n_simulations=20,
+    )
+    result = sim.compute(agg, start=None, end=None, frequency="monthly")
+
+    # 401k has zero returns and no cashflows — value must stay flat
+    np.testing.assert_allclose(
+        result.accounts["401k"].paths,
+        300_000.0,
+        atol=1e-4,
+    )
+    # taxable receives contributions — must grow above initial
+    assert result.accounts["taxable"].paths[:, -1].mean() > 500_000.0
+
+
+# ---------------------------------------------------------------------------
+# MultiWealthSimulation — is_real flag
+# ---------------------------------------------------------------------------
+
+def test_multi_real_mode_reduces_terminal_wealth() -> None:
+    agg = _make_aggregate()
+    sim = MultiWealthSimulation(
+        method=MonteCarlo(seed=42), horizon_years=5, n_simulations=50,
+        inflation_rate=0.03,
+    )
+    nominal = sim.compute(agg, start=None, end=None, frequency="monthly", real=False)
+    real = sim.compute(agg, start=None, end=None, frequency="monthly", real=True)
+    assert real.total.summary()["median_terminal"] < nominal.total.summary()["median_terminal"]
+    assert real.total.is_real is True
