@@ -180,6 +180,8 @@ def as_cashflow(
     bend_points: tuple[float, float] = BEND_POINTS_2024,
     real: bool = True,
     effective_tax_rate: float = 0.0,
+    start_year: float | None = None,
+    end_year: float | None = None,
 ) -> PeriodicCashflow:
     """Create a monthly :class:`~waypoint.cashflows.PeriodicCashflow` for SS income.
 
@@ -204,6 +206,13 @@ def as_cashflow(
         Marginal rate applied to SS benefits at withdrawal time (up to 85 % of
         benefits may be taxable above certain income thresholds).  Defaults to
         ``0.0`` (no tax adjustment).
+    start_year:
+        Simulation year (0-indexed) at which SS income begins.  Typically set
+        to the number of years from simulation start until claiming age.
+        ``None`` (default) means active from the start.
+    end_year:
+        Simulation year after which SS income stops (e.g. end of life horizon).
+        ``None`` (default) means active indefinitely.
 
     Returns
     -------
@@ -217,6 +226,8 @@ def as_cashflow(
         mode=CashflowMode.DOLLAR,
         real=real,
         effective_tax_rate=effective_tax_rate,
+        start_year=start_year,
+        end_year=end_year,
     )
 
 

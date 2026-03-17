@@ -47,6 +47,14 @@ class PeriodicCashflow:
         Portfolio slot names that receive this cash flow.  ``None`` (default)
         means all slots receive the cash flow proportionally.  Use this to
         restrict contributions or withdrawals to liquid assets only.
+    start_year:
+        Simulation year (0-indexed) at which this cashflow becomes active.
+        ``None`` means active from the start.  E.g. ``start_year=5.0`` means
+        the cashflow does not fire before year 5.
+    end_year:
+        Simulation year (0-indexed) after which this cashflow stops firing.
+        ``None`` means active indefinitely.  E.g. ``end_year=30.0`` means the
+        cashflow stops after year 30.
     """
 
     amount: float
@@ -55,6 +63,8 @@ class PeriodicCashflow:
     real: bool = field(default=False)
     effective_tax_rate: float = field(default=0.0)
     slots: tuple[str, ...] | None = field(default=None)
+    start_year: float | None = field(default=None)
+    end_year: float | None = field(default=None)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "frequency", Frequency(self.frequency))
@@ -95,6 +105,11 @@ class PeriodicCashflow:
         cashflow_periods = CASHFLOW_PERIODS[self.frequency]
         # period 0 is the starting period — cashflows apply from period 1 onward
         if period == 0:
+            return 0.0
+        current_year = period / periods_per_year
+        if self.start_year is not None and current_year < self.start_year:
+            return 0.0
+        if self.end_year is not None and current_year > self.end_year:
             return 0.0
         if cashflow_periods >= periods_per_year:
             count = cashflow_periods // periods_per_year
@@ -139,6 +154,10 @@ class LumpSum:
     slots:
         Portfolio slot names that receive this cash flow.  ``None`` (default)
         means all slots receive the cash flow proportionally.
+    start_year:
+        If set, the lump sum is suppressed when ``at_year < start_year``.
+    end_year:
+        If set, the lump sum is suppressed when ``at_year > end_year``.
     """
 
     amount: float
@@ -146,6 +165,8 @@ class LumpSum:
     real: bool = field(default=False)
     effective_tax_rate: float = field(default=0.0)
     slots: tuple[str, ...] | None = field(default=None)
+    start_year: float | None = field(default=None)
+    end_year: float | None = field(default=None)
 
     def __post_init__(self) -> None:
         if isinstance(self.slots, list):
@@ -176,6 +197,10 @@ class LumpSum:
         """
         target_period = round(self.at_year * periods_per_year)
         if period != target_period:
+            return 0.0
+        if self.start_year is not None and self.at_year < self.start_year:
+            return 0.0
+        if self.end_year is not None and self.at_year > self.end_year:
             return 0.0
         base = self.amount * cumulative_inflation if self.real else self.amount
         return _apply_tax(base, self.effective_tax_rate)

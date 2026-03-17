@@ -294,6 +294,71 @@ def test_lump_sum_slots_list_coerced_to_tuple() -> None:
 
 
 # ---------------------------------------------------------------------------
+# PeriodicCashflow — start_year / end_year
+# ---------------------------------------------------------------------------
+
+def test_periodic_cashflow_start_year_suppresses_before() -> None:
+    """Cashflow does not fire before start_year."""
+    cf = PeriodicCashflow(amount=1000.0, frequency="monthly", start_year=2.0)
+    # period 12 = year 1 (< start_year=2) → silent
+    assert _at(cf, 12) == 0.0
+
+
+def test_periodic_cashflow_start_year_fires_at_boundary() -> None:
+    """Cashflow fires at the exact start_year boundary."""
+    cf = PeriodicCashflow(amount=1000.0, frequency="monthly", start_year=2.0)
+    # period 24 = year 2.0 — exactly at boundary
+    assert abs(_at(cf, 24) - 1000.0) < 1e-9
+
+
+def test_periodic_cashflow_end_year_fires_at_boundary() -> None:
+    """Cashflow fires at the exact end_year boundary."""
+    cf = PeriodicCashflow(amount=1000.0, frequency="monthly", end_year=5.0)
+    # period 60 = year 5.0 — exactly at boundary
+    assert abs(_at(cf, 60) - 1000.0) < 1e-9
+
+
+def test_periodic_cashflow_end_year_suppresses_after() -> None:
+    """Cashflow does not fire after end_year."""
+    cf = PeriodicCashflow(amount=1000.0, frequency="monthly", end_year=5.0)
+    # period 61 = year 5.083… (> end_year=5) → silent
+    assert _at(cf, 61) == 0.0
+
+
+def test_periodic_cashflow_window_fires_only_within_range() -> None:
+    """Cashflow is active only within [start_year, end_year]."""
+    cf = PeriodicCashflow(
+        amount=500.0, frequency="monthly", start_year=1.0, end_year=3.0
+    )
+    assert _at(cf, 11) == 0.0   # year 0.917 < start
+    assert abs(_at(cf, 12) - 500.0) < 1e-9  # year 1.0 = start
+    assert abs(_at(cf, 36) - 500.0) < 1e-9  # year 3.0 = end
+    assert _at(cf, 37) == 0.0   # year 3.083 > end
+
+
+# ---------------------------------------------------------------------------
+# LumpSum — start_year / end_year
+# ---------------------------------------------------------------------------
+
+def test_lump_sum_start_year_suppresses_if_at_year_before() -> None:
+    """LumpSum with at_year < start_year never fires."""
+    cf = LumpSum(amount=10_000.0, at_year=3.0, start_year=5.0)
+    assert _at(cf, 36) == 0.0
+
+
+def test_lump_sum_end_year_suppresses_if_at_year_after() -> None:
+    """LumpSum with at_year > end_year never fires."""
+    cf = LumpSum(amount=10_000.0, at_year=10.0, end_year=8.0)
+    assert _at(cf, 120) == 0.0
+
+
+def test_lump_sum_fires_when_at_year_within_window() -> None:
+    """LumpSum fires normally when at_year is within [start_year, end_year]."""
+    cf = LumpSum(amount=50_000.0, at_year=5.0, start_year=1.0, end_year=10.0)
+    assert abs(_at(cf, 60) - 50_000.0) < 1e-9
+
+
+# ---------------------------------------------------------------------------
 # _apply_tax helper
 # ---------------------------------------------------------------------------
 

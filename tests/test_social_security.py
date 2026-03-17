@@ -204,6 +204,27 @@ def test_as_cashflow_nominal_with_tax() -> None:
     assert abs(cf.effective_tax_rate - 0.22) < 1e-9
 
 
+def test_as_cashflow_start_end_year_passed_through() -> None:
+    cf = as_cashflow(
+        aime=4_000.0,
+        birth_year=1962,
+        claim_age=67.0,
+        start_year=5.0,
+        end_year=30.0,
+    )
+    assert cf.start_year == 5.0
+    assert cf.end_year == 30.0
+
+
+def test_as_cashflow_start_year_suppresses_early_periods() -> None:
+    """SS cashflow with start_year=5 must not fire before year 5."""
+    cf = as_cashflow(aime=4_000.0, birth_year=1962, claim_age=67.0, start_year=5.0)
+    # period 48 = year 4 (< 5) → 0
+    assert cf.amount_at(48, 12, 0.0, 1.0) == 0.0
+    # period 60 = year 5 → fires
+    assert cf.amount_at(60, 12, 0.0, 1.0) > 0.0
+
+
 # ---------------------------------------------------------------------------
 # estimate_aime
 # ---------------------------------------------------------------------------
