@@ -102,3 +102,13 @@ CHINA_TECH = AssetDef(
     sub_asset_class="Technology",
     geography="China",
 )
+
+US_FINANCIALS = AssetDef(
+    name="Dow Jones US Financials",
+    symbol="^DJUSFN",
+    vendor="yfinance",
+    frequency=Frequency.DAILY,
+    asset_class="Equities",
+    sub_asset_class="Financials",
+    geography="US",
+)
