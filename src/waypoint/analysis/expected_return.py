@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING, cast
 
+import plotly.graph_objects as go
+
 if TYPE_CHECKING:
     from waypoint.portfolio import Portfolio
 
@@ -30,6 +32,12 @@ class ExpectedReturnResult:
     per_asset: dict[str, float]
     portfolio: float
     method_name: str
+
+    def plot(self) -> go.Figure:
+        """Horizontal bar chart of per-asset annualised expected returns."""
+        from waypoint.analysis.viz import plot_expected_return
+
+        return plot_expected_return(self)
 
 
 @dataclass

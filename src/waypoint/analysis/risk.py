@@ -8,9 +8,11 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 import numpy as np
+import plotly.graph_objects as go
 import polars as pl
 
 if TYPE_CHECKING:
+    from waypoint.analysis.expected_return import ExpectedReturnResult
     from waypoint.portfolio import Portfolio
 
 from waypoint.analysis.methods.risk import RiskMethod
@@ -38,6 +40,18 @@ class RiskResult:
     volatilities: dict[str, float]
     portfolio_volatility: float
     method_name: str
+
+    def plot(self) -> go.Figure:
+        """Heatmap of the asset correlation matrix."""
+        from waypoint.analysis.viz import plot_correlation
+
+        return plot_correlation(self)
+
+    def plot_risk_return(self, er_result: ExpectedReturnResult) -> go.Figure:
+        """Scatter of annualised volatility vs expected return, one point per asset."""
+        from waypoint.analysis.viz import plot_risk_return
+
+        return plot_risk_return(er_result, self)
 
 
 @dataclass

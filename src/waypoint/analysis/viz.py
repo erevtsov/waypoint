@@ -8,8 +8,176 @@ import plotly.graph_objects as go
 
 if TYPE_CHECKING:
     from waypoint.analysis.compare import ComparisonResult
+    from waypoint.analysis.expected_return import ExpectedReturnResult
     from waypoint.analysis.optimizer import EfficientFrontierResult
-    from waypoint.analysis.simulation import SimulationResult
+    from waypoint.analysis.risk import RiskResult
+    from waypoint.analysis.simulation import MultiWealthSimulationResult, SimulationResult
+
+
+def plot_account_trajectories(result: MultiWealthSimulationResult) -> go.Figure:
+    """Line chart of per-account median wealth paths plus the total.
+
+    Each account is a separate line.  The total is rendered as a thick dashed
+    black line so it stands out from the per-account series.
+
+    Parameters
+    ----------
+    result:
+        A ``MultiWealthSimulationResult`` from ``MultiWealthSimulation.compute``.
+
+    Returns
+    -------
+    go.Figure
+    """
+    fig = go.Figure()
+    use_dates = "date" in result.total.percentile_df.columns
+    real = result.total.is_real
+
+    for account_name, acct_result in result.accounts.items():
+        df = acct_result.percentile_df
+        x = df["date"].to_list() if use_dates else df["period"].to_list()
+        fig.add_trace(
+            go.Scatter(x=x, y=df["p50"].to_list(), name=account_name, mode="lines")
+        )
+
+    df = result.total.percentile_df
+    x = df["date"].to_list() if use_dates else df["period"].to_list()
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=df["p50"].to_list(),
+            name="TOTAL",
+            mode="lines",
+            line={"width": 3, "dash": "dash", "color": "black"},
+        )
+    )
+
+    value_label = "Wealth (Real)" if real else "Wealth (Nominal)"
+    fig.update_layout(
+        title="Per-Account Median Wealth Paths" + (" (Real)" if real else " (Nominal)"),
+        xaxis_title="Date" if use_dates else "Period",
+        yaxis_title=value_label,
+        hovermode="x unified",
+        legend={"orientation": "h"},
+    )
+    return fig
+
+
+def plot_expected_return(result: ExpectedReturnResult) -> go.Figure:
+    """Horizontal bar chart of per-asset annualised expected returns, sorted descending.
+
+    Parameters
+    ----------
+    result:
+        An ``ExpectedReturnResult`` from ``ExpectedReturn.compute``.
+
+    Returns
+    -------
+    go.Figure
+    """
+    items = sorted(result.per_asset.items(), key=lambda kv: kv[1])
+    names = [k for k, _ in items]
+    values = [v for _, v in items]
+
+    fig = go.Figure(
+        go.Bar(
+            x=values,
+            y=names,
+            orientation="h",
+            marker={"color": values, "colorscale": "RdYlGn", "showscale": False},
+            hovertemplate="%{y}: %{x:.1%}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title=f"Expected Returns by Asset ({result.method_name})",
+        xaxis_title="Annualised Expected Return",
+        xaxis={"tickformat": ".1%"},
+        yaxis_title="",
+        height=max(300, 40 * len(names)),
+    )
+    return fig
+
+
+def plot_risk_return(er_result: ExpectedReturnResult, risk_result: RiskResult) -> go.Figure:
+    """Scatter of annualised volatility (x) vs expected return (y), one point per asset.
+
+    Parameters
+    ----------
+    er_result:
+        An ``ExpectedReturnResult`` from ``ExpectedReturn.compute``.
+    risk_result:
+        A ``RiskResult`` from ``Risk.compute``, used for per-asset volatilities.
+
+    Returns
+    -------
+    go.Figure
+    """
+    names = list(er_result.per_asset.keys())
+    returns = [er_result.per_asset[n] for n in names]
+    vols = [risk_result.volatilities[n] for n in names]
+
+    fig = go.Figure(
+        go.Scatter(
+            x=vols,
+            y=returns,
+            mode="markers+text",
+            text=names,
+            textposition="top center",
+            marker={
+                "size": 10,
+                "color": returns,
+                "colorscale": "RdYlGn",
+                "showscale": True,
+                "colorbar": {"title": "Return"},
+            },
+            hovertemplate="%{text}<br>Vol: %{x:.1%}<br>Return: %{y:.1%}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title="Asset Risk vs. Expected Return",
+        xaxis_title="Annualised Volatility",
+        yaxis_title="Annualised Expected Return",
+        xaxis={"tickformat": ".1%"},
+        yaxis={"tickformat": ".1%"},
+        height=500,
+    )
+    return fig
+
+
+def plot_correlation(risk_result: RiskResult) -> go.Figure:
+    """Heatmap of the asset correlation matrix derived from a ``RiskResult``.
+
+    Parameters
+    ----------
+    risk_result:
+        A ``RiskResult`` from ``Risk.compute``.
+
+    Returns
+    -------
+    go.Figure
+    """
+    import numpy as np
+    import plotly.express as px
+
+    names = list(risk_result.volatilities.keys())
+    cov = risk_result.covariance.to_numpy()
+    vols_arr = np.array([risk_result.volatilities[n] for n in names])
+    safe_vols = np.where(vols_arr > 0, vols_arr, 1.0)
+    corr = cov / np.outer(safe_vols, safe_vols)
+    np.fill_diagonal(corr, 1.0)
+
+    fig = px.imshow(
+        corr,
+        x=names,
+        y=names,
+        color_continuous_scale="RdBu_r",
+        zmin=-1,
+        zmax=1,
+        text_auto=".2f",
+        title=f"Asset Correlation Matrix ({risk_result.method_name})",
+    )
+    fig.update_layout(height=max(400, 60 * len(names)))
+    return fig
 
 
 def plot_efficient_frontier(result: EfficientFrontierResult) -> go.Figure:

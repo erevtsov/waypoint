@@ -412,6 +412,12 @@ class MultiWealthSimulationResult:
 
         return plot_allocation_dollar(self.total)
 
+    def plot_accounts(self) -> go.Figure:
+        """Line chart of per-account median wealth paths plus the total."""
+        from waypoint.analysis.viz import plot_account_trajectories
+
+        return plot_account_trajectories(self)
+
 
 @dataclass
 class MultiWealthSimulation:

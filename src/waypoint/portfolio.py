@@ -273,6 +273,70 @@ class Portfolio:
         self._cache[cache_key] = wide
         return wide
 
+    def data_window(
+        self,
+        start: date | str | None = None,
+        end: date | str | None = None,
+        frequency: Frequency | str | None = None,
+    ) -> pl.DataFrame:
+        """Per-slot date coverage and the effective inner-join window.
+
+        Returns a ``pl.DataFrame`` with columns
+        ``["asset", "start", "end", "periods"]``.  Each row corresponds to
+        one portfolio slot; the final row labelled ``"INNER JOIN"`` shows the
+        effective estimation window after aligning all slots on ``"date"``.
+
+        Parameters
+        ----------
+        start, end:
+            Date range to inspect.  Required when any slot is an ``AssetDef``.
+        frequency:
+            When provided, returns are resampled to this frequency before
+            computing date ranges, matching what analytics actually see.
+        """
+        from waypoint.asset_def import AssetDef
+        from waypoint.assets import Asset, LeveragedAsset
+        from waypoint.data import fetch
+
+        start_dt: date | None = date.fromisoformat(start) if isinstance(start, str) else start
+        end_dt: date | None = date.fromisoformat(end) if isinstance(end, str) else end
+        freq: Frequency | None = Frequency(frequency) if frequency is not None else None
+
+        rows: list[dict[str, object]] = []
+        for slot_name, slot in self._slots.items():
+            if isinstance(slot, AssetDef):
+                asset = fetch(slot, start=start_dt, end=end_dt)  # type: ignore[arg-type]
+                returns_df = asset.returns
+            else:
+                assert isinstance(slot, (Asset, LeveragedAsset))
+                returns_df = (
+                    slot.get_returns(start_dt, end_dt)  # type: ignore[arg-type]
+                    if start_dt is not None
+                    else slot.returns
+                )
+            single = returns_df.rename({"returns": slot_name})
+            if freq is not None:
+                single = _resample_wide(single, freq)
+            rows.append(
+                {
+                    "asset": slot_name,
+                    "start": single["date"].min(),
+                    "end": single["date"].max(),
+                    "periods": len(single),
+                }
+            )
+
+        wide = self.get_returns(start_dt, end_dt, frequency=freq)
+        rows.append(
+            {
+                "asset": "INNER JOIN",
+                "start": wide["date"].min(),
+                "end": wide["date"].max(),
+                "periods": len(wide),
+            }
+        )
+        return pl.DataFrame(rows)
+
     def portfolio_returns(
         self,
         start: date | str | None = None,

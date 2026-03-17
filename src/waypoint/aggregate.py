@@ -128,6 +128,19 @@ class Aggregate:
             initial_wealth=total_wealth,
         )
 
+    def data_window(
+        self,
+        start: str | None = None,
+        end: str | None = None,
+        frequency: str | None = None,
+    ) -> Any:
+        """Per-asset date coverage and effective inner-join window across all accounts.
+
+        Delegates to the flattened portfolio's ``data_window``.  See
+        ``Portfolio.data_window`` for column descriptions.
+        """
+        return self.flatten().data_window(start, end, frequency)
+
     def run(self, analytic: Any, **kwargs: Any) -> dict[str, Any]:
         """Run ``analytic.compute(portfolio, **kwargs)`` for each portfolio.
 
