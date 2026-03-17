@@ -53,4 +53,11 @@ class FredProvider:
                 "close": series.values.tolist(),
             }
         )
-        return df.with_columns(pl.col("date").cast(pl.Date)).drop_nulls()
+        # FRED sometimes returns IEEE-754 NaN for missing observations.
+        # Polars `drop_nulls` only removes Polars null, not NaN floats, so we
+        # must convert NaN → null first before dropping.
+        return (
+            df.with_columns(pl.col("date").cast(pl.Date))
+            .with_columns(pl.col("close").fill_nan(None))
+            .drop_nulls()
+        )

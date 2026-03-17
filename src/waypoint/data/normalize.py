@@ -56,7 +56,11 @@ def rate_to_daily_returns(df: pl.DataFrame) -> pl.DataFrame:
         DataFrame with columns ``"date"`` (``pl.Date``) and ``"returns"``
         (``pl.Float64``) of decimal daily returns.
     """
-    return df.select(
+    result = df.select(
         pl.col("date"),
         (pl.col("close") / 100 / MONEY_MARKET_DAY_COUNT).alias("returns"),
     )
+    # FRED omits rate observations on US federal holidays; those days appear
+    # in the series with NaN values.  Drop them so they don't propagate into
+    # downstream computations (covariance, resampling, etc.).
+    return result.with_columns(pl.col("returns").fill_nan(None)).drop_nulls()
