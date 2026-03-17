@@ -95,6 +95,7 @@ class Portfolio:
         weights: dict[str, float],
         name: str = "",
         normalize_weights: bool = True,
+        initial_wealth: float | None = None,
         expected_return_method: ReturnMethod | None = None,
         risk_method: RiskMethod | None = None,
     ) -> None:
@@ -119,6 +120,7 @@ class Portfolio:
 
         self._slots: dict[str, Asset | LeveragedAsset | AssetDef] = dict(slots)
         self.name = name
+        self.initial_wealth: float | None = initial_wealth
 
         self._expected_return_method: ReturnMethod = (
             expected_return_method if expected_return_method is not None else GeometricMean()

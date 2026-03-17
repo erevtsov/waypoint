@@ -3,6 +3,7 @@
 from importlib.metadata import version
 
 from waypoint import analytics, cashflows, catalog, returns, risk, sim
+from waypoint.aggregate import Aggregate
 from waypoint.asset_def import AssetDef
 from waypoint.assets import Asset, LeveragedAsset
 from waypoint.constraints import DEFAULT_CONSTRAINTS, LongOnly, SumToOne, WeightBounds
@@ -30,6 +31,7 @@ __all__ = [
     "AssetDef",
     "IndicatorDef",
     # domain objects
+    "Aggregate",
     "Asset",
     "LeveragedAsset",
     "Indicator",

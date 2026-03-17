@@ -116,7 +116,7 @@ class WealthSimulation:
     method: SimulationMethod
     cashflows: list[CashflowDefinition] | None = field(default=None)
     horizon_years: int = field(default=30)
-    initial_wealth: float = field(default=1.0)
+    initial_wealth: float | None = field(default=None)
     n_simulations: int = field(default=1000)
     inflation_rate: float = field(default=0.0)
 
@@ -158,10 +158,18 @@ class WealthSimulation:
         freq = Frequency(frequency)
         periods_per_year = PERIODS_PER_YEAR[freq]
 
+        initial_wealth = (
+            self.initial_wealth if self.initial_wealth is not None else portfolio.initial_wealth
+        )
+        if initial_wealth is None:
+            raise ValueError(
+                "initial_wealth must be set either on WealthSimulation or on the Portfolio."
+            )
+
         asset_names = portfolio.names
         n_assets = len(asset_names)
         weights = portfolio.weights
-        initial_values = np.array([weights[n] * self.initial_wealth for n in asset_names])
+        initial_values = np.array([weights[n] * initial_wealth for n in asset_names])
 
         # Estimate per-asset annualised mu vector and covariance matrix,
         # then scale down to per-period quantities for the simulation engine.
@@ -222,7 +230,7 @@ class WealthSimulation:
             percentile_df=percentile_df,
             weights=weights,
             allocation_dollar=allocation_dollar,
-            initial_wealth=self.initial_wealth,
+            initial_wealth=initial_wealth,
             horizon_years=self.horizon_years,
             start_date=parsed_start,
             is_real=real,
