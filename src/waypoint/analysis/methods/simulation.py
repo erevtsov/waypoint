@@ -91,10 +91,26 @@ class MonteCarlo:
         else:
             # Multivariate case: draw and compute portfolio return
             # Returns shape: (n_simulations * n_periods, n_assets)
+            if not np.all(np.isfinite(sigma_arr)):
+                bad = np.argwhere(~np.isfinite(sigma_arr))
+                raise ValueError(
+                    f"Covariance matrix contains non-finite values at indices {bad.tolist()}. "
+                    "Check that all assets have overlapping return history and no zero-variance series."
+                )
+            # Project onto the nearest positive-definite matrix: decompose via
+            # eigh (symmetric eigendecomposition), clip any negative eigenvalues
+            # to a small floor, then reconstruct. This handles near-singular or
+            # rank-deficient covariance matrices that arise when n_assets is
+            # large relative to the number of historical observations.
+            MIN_EIGENVALUE = 1e-8
+            eigvals, eigvecs = np.linalg.eigh(sigma_arr)
+            eigvals = np.maximum(eigvals, MIN_EIGENVALUE)
+            sigma_psd = eigvecs @ np.diag(eigvals) @ eigvecs.T
             draws_mv: np.ndarray = rng.multivariate_normal(
                 mean=mu_arr,
-                cov=sigma_arr,
+                cov=sigma_psd,
                 size=(n_simulations, n_periods),
+                method="eigh",
             )
             draws = draws_mv
 
