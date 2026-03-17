@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import plotly.graph_objects as go
 
@@ -12,6 +12,21 @@ if TYPE_CHECKING:
     from waypoint.analysis.optimizer import EfficientFrontierResult
     from waypoint.analysis.risk import RiskResult
     from waypoint.analysis.simulation import MultiWealthSimulationResult, SimulationResult
+
+
+def _year_x(sim_result: Any) -> tuple[list, dict]:  # type: ignore[type-arg]
+    """Return (x_values, xaxis_layout_dict) for simulation time-series plots.
+
+    When the result has a ``"date"`` column, calendar dates are used and the
+    axis is formatted to show 4-digit years.  Otherwise the period index is
+    converted to fractional years from period 0.
+    """
+    df = sim_result.percentile_df
+    if "date" in df.columns:
+        return df["date"].to_list(), {"title": "Year", "tickformat": "%Y", "dtick": "M12"}
+    n_periods = sim_result.paths.shape[1] - 1
+    ppy = (n_periods / sim_result.horizon_years) if sim_result.horizon_years > 0 else 1.0
+    return [round(t / ppy, 3) for t in df["period"].to_list()], {"title": "Year"}
 
 
 def plot_account_trajectories(result: MultiWealthSimulationResult) -> go.Figure:
@@ -30,22 +45,25 @@ def plot_account_trajectories(result: MultiWealthSimulationResult) -> go.Figure:
     go.Figure
     """
     fig = go.Figure()
-    use_dates = "date" in result.total.percentile_df.columns
     real = result.total.is_real
+    _, xaxis_cfg = _year_x(result.total)
 
     for account_name, acct_result in result.accounts.items():
-        df = acct_result.percentile_df
-        x = df["date"].to_list() if use_dates else df["period"].to_list()
+        x, _ = _year_x(acct_result)
         fig.add_trace(
-            go.Scatter(x=x, y=df["p50"].to_list(), name=account_name, mode="lines")
+            go.Scatter(
+                x=x,
+                y=acct_result.percentile_df["p50"].to_list(),
+                name=account_name,
+                mode="lines",
+            )
         )
 
-    df = result.total.percentile_df
-    x = df["date"].to_list() if use_dates else df["period"].to_list()
+    x, _ = _year_x(result.total)
     fig.add_trace(
         go.Scatter(
             x=x,
-            y=df["p50"].to_list(),
+            y=result.total.percentile_df["p50"].to_list(),
             name="TOTAL",
             mode="lines",
             line={"width": 3, "dash": "dash", "color": "black"},
@@ -55,7 +73,7 @@ def plot_account_trajectories(result: MultiWealthSimulationResult) -> go.Figure:
     value_label = "Wealth (Real)" if real else "Wealth (Nominal)"
     fig.update_layout(
         title="Per-Account Median Wealth Paths" + (" (Real)" if real else " (Nominal)"),
-        xaxis_title="Date" if use_dates else "Period",
+        xaxis=xaxis_cfg,
         yaxis_title=value_label,
         hovermode="x unified",
         legend={"orientation": "h"},
@@ -242,8 +260,7 @@ def plot_wealth_simulation(result: SimulationResult) -> go.Figure:
     go.Figure
     """
     df = result.percentile_df
-    use_dates = "date" in df.columns
-    x_values = df["date"].to_list() if use_dates else df["period"].to_list()
+    x_values, xaxis_cfg = _year_x(result)
 
     value_label = "Portfolio Value (Real)" if result.is_real else "Portfolio Value (Nominal)"
     title = (
@@ -292,7 +309,7 @@ def plot_wealth_simulation(result: SimulationResult) -> go.Figure:
 
     fig.update_layout(
         title=title,
-        xaxis_title="Date" if use_dates else "Period",
+        xaxis=xaxis_cfg,
         yaxis_title=value_label,
         legend={"orientation": "h"},
     )
@@ -316,13 +333,13 @@ def plot_allocation_dollar(result: SimulationResult) -> go.Figure:
     -------
     go.Figure
     """
-    use_dates = "date" in result.percentile_df.columns
+    _, xaxis_cfg = _year_x(result)
     value_label = "Asset Value (Real)" if result.is_real else "Asset Value (Nominal)"
     title = "Asset Allocation — Median $ Values" + (" (Real)" if result.is_real else " (Nominal)")
 
     fig = go.Figure()
     for name, df in result.allocation_dollar.items():
-        x_values = df["date"].to_list() if use_dates else df["period"].to_list()
+        x_values, _ = _year_x(result)
         fig.add_trace(
             go.Scatter(
                 x=x_values,
@@ -336,7 +353,7 @@ def plot_allocation_dollar(result: SimulationResult) -> go.Figure:
 
     fig.update_layout(
         title=title,
-        xaxis_title="Date" if use_dates else "Period",
+        xaxis=xaxis_cfg,
         yaxis_title=value_label,
         legend={"orientation": "h"},
     )
@@ -372,12 +389,12 @@ def plot_comparison(result: ComparisonResult) -> go.Figure:
     """
     fig = go.Figure()
 
-    # Use dates on the x-axis only when every scenario was computed with one
-    use_dates = all("date" in r.percentile_df.columns for r in result.scenarios.values())
+    first = next(iter(result.scenarios.values()))
+    _, xaxis_cfg = _year_x(first)
 
     for idx, (label, sim_result) in enumerate(result.scenarios.items()):
+        x_values, _ = _year_x(sim_result)
         df = sim_result.percentile_df
-        x_values = df["date"].to_list() if use_dates else df["period"].to_list()
         r, g, b = _SCENARIO_COLORS[idx % len(_SCENARIO_COLORS)]
 
         # p5–p95 band
@@ -422,7 +439,7 @@ def plot_comparison(result: ComparisonResult) -> go.Figure:
 
     fig.update_layout(
         title="Scenario Comparison — Wealth Simulation",
-        xaxis_title="Date" if use_dates else "Period",
+        xaxis=xaxis_cfg,
         yaxis_title="Portfolio Value",
         legend={"orientation": "h"},
     )

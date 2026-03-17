@@ -356,6 +356,8 @@ class WealthSimulation:
             parsed_start = (
                 date.fromisoformat(start_date) if isinstance(start_date, str) else start_date
             )
+        elif end is not None:
+            parsed_start = date.fromisoformat(end) if isinstance(end, str) else end
 
         percentile_df = _compute_percentiles(paths, parsed_start, periods_per_year)
         allocation_dollar = {
@@ -490,6 +492,8 @@ class MultiWealthSimulation:
             parsed_start = (
                 date.fromisoformat(start_date) if isinstance(start_date, str) else start_date
             )
+        elif end is not None:
+            parsed_start = date.fromisoformat(end) if isinstance(end, str) else end
 
         # ------------------------------------------------------------------
         # 1. Flatten to full asset universe; estimate parameters jointly.
