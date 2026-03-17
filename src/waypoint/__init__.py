@@ -2,7 +2,7 @@
 
 from importlib.metadata import version
 
-from waypoint import analytics, cashflows, catalog, returns, risk, sim
+from waypoint import analytics, cashflows, catalog, returns, risk, sim, social_security
 from waypoint.aggregate import Aggregate
 from waypoint.asset_def import AssetDef
 from waypoint.assets import Asset, LeveragedAsset
@@ -24,6 +24,7 @@ __all__ = [
     "returns",
     "risk",
     "sim",
+    "social_security",
     # enums
     "CashflowMode",
     "Frequency",
