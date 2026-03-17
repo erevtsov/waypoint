@@ -9,6 +9,8 @@ import polars as pl
 import pytest
 
 from waypoint.aggregate import Aggregate
+from waypoint.analysis.methods.returns import ArithmeticMean, GeometricMean
+from waypoint.analysis.methods.risk import LedoitWolf, SampleCovariance
 from waypoint.assets import Asset
 from waypoint.portfolio import Portfolio
 
@@ -187,6 +189,94 @@ def test_flatten_conflicting_slot_names_raises() -> None:
     agg = Aggregate([p1, p2])
     with pytest.raises(ValueError, match="different assets"):
         agg.flatten()
+
+
+def test_flatten_propagates_common_expected_return_method() -> None:
+    """When all portfolios share the same ER method, the flat portfolio inherits it."""
+    eq = _make_asset("Equities", "SPY")
+    fi = _make_asset("Bonds", "AGG", seed=1)
+    p1 = Portfolio(
+        {"eq": eq, "fi": fi}, weights={"eq": 0.6, "fi": 0.4}, name="p1",
+        initial_wealth=600_000.0, expected_return_method=ArithmeticMean(),
+    )
+    p2 = Portfolio(
+        {"eq": eq, "fi": fi}, weights={"eq": 0.5, "fi": 0.5}, name="p2",
+        initial_wealth=400_000.0, expected_return_method=ArithmeticMean(),
+    )
+    flat = Aggregate([p1, p2]).flatten()
+    assert isinstance(flat.expected_return_method, ArithmeticMean)
+
+
+def test_flatten_propagates_common_risk_method() -> None:
+    """When all portfolios share the same risk method, the flat portfolio inherits it."""
+    eq = _make_asset("Equities", "SPY")
+    fi = _make_asset("Bonds", "AGG", seed=1)
+    p1 = Portfolio(
+        {"eq": eq, "fi": fi}, weights={"eq": 0.6, "fi": 0.4}, name="p1",
+        initial_wealth=600_000.0, risk_method=LedoitWolf(),
+    )
+    p2 = Portfolio(
+        {"eq": eq, "fi": fi}, weights={"eq": 0.5, "fi": 0.5}, name="p2",
+        initial_wealth=400_000.0, risk_method=LedoitWolf(),
+    )
+    flat = Aggregate([p1, p2]).flatten()
+    assert isinstance(flat.risk_method, LedoitWolf)
+
+
+def test_flatten_default_methods_propagated() -> None:
+    """Default GeometricMean + SampleCovariance are preserved through flattening."""
+    eq = _make_asset("Equities", "SPY")
+    p1 = Portfolio({"eq": eq}, weights={"eq": 1.0}, name="p1", initial_wealth=500_000.0)
+    p2 = Portfolio({"eq": eq}, weights={"eq": 1.0}, name="p2", initial_wealth=500_000.0)
+    flat = Aggregate([p1, p2]).flatten()
+    assert isinstance(flat.expected_return_method, GeometricMean)
+    assert isinstance(flat.risk_method, SampleCovariance)
+
+
+def test_flatten_differing_expected_return_methods_raises() -> None:
+    """Portfolios with different ER methods raise ValueError when flattened."""
+    eq = _make_asset("Equities", "SPY")
+    p1 = Portfolio(
+        {"eq": eq}, weights={"eq": 1.0}, name="p1",
+        initial_wealth=500_000.0, expected_return_method=ArithmeticMean(),
+    )
+    p2 = Portfolio(
+        {"eq": eq}, weights={"eq": 1.0}, name="p2",
+        initial_wealth=500_000.0, expected_return_method=GeometricMean(),
+    )
+    with pytest.raises(ValueError, match="expected_return_method"):
+        Aggregate([p1, p2]).flatten()
+
+
+def test_flatten_differing_risk_methods_raises() -> None:
+    """Portfolios with different risk methods raise ValueError when flattened."""
+    eq = _make_asset("Equities", "SPY")
+    p1 = Portfolio(
+        {"eq": eq}, weights={"eq": 1.0}, name="p1",
+        initial_wealth=500_000.0, risk_method=SampleCovariance(),
+    )
+    p2 = Portfolio(
+        {"eq": eq}, weights={"eq": 1.0}, name="p2",
+        initial_wealth=500_000.0, risk_method=LedoitWolf(),
+    )
+    with pytest.raises(ValueError, match="risk_method"):
+        Aggregate([p1, p2]).flatten()
+
+
+def test_data_window_unaffected_by_differing_methods() -> None:
+    """data_window() works even when portfolios have different method settings."""
+    eq = _make_asset("Equities", "SPY")
+    p1 = Portfolio(
+        {"eq": eq}, weights={"eq": 1.0}, name="p1",
+        initial_wealth=500_000.0, expected_return_method=ArithmeticMean(),
+    )
+    p2 = Portfolio(
+        {"eq": eq}, weights={"eq": 1.0}, name="p2",
+        initial_wealth=500_000.0, expected_return_method=GeometricMean(),
+    )
+    # Should not raise even though methods differ
+    window = Aggregate([p1, p2]).data_window()
+    assert window is not None
 
 
 # ---------------------------------------------------------------------------
