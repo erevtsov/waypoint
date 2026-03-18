@@ -81,6 +81,68 @@ def plot_account_trajectories(result: MultiWealthSimulationResult) -> go.Figure:
     return fig
 
 
+def plot_cashflow_schedule(result: MultiWealthSimulationResult) -> go.Figure:
+    """Stacked bar chart of annual net cashflows by account.
+
+    Positive cashflows (contributions, income) stack above zero; negative
+    cashflows (withdrawals, spending) stack below zero — Plotly's
+    ``barmode="relative"`` layout.  A line trace for the total net cashflow
+    is overlaid in black.
+
+    ``pct_portfolio`` cashflows are evaluated at the median simulation path,
+    so the amounts are representative rather than exact per-path values.
+
+    Parameters
+    ----------
+    result:
+        A ``MultiWealthSimulationResult`` from ``MultiWealthSimulation.compute``.
+
+    Returns
+    -------
+    go.Figure
+    """
+    df = result.cashflow_schedule
+    real = result.total.is_real
+    account_names = [c for c in df.columns if c not in ("year", "total")]
+    years = df["year"].to_list()
+
+    fig = go.Figure()
+
+    for name in account_names:
+        fig.add_trace(
+            go.Bar(
+                x=years,
+                y=df[name].to_list(),
+                name=name,
+                hovertemplate="%{x}: %{y:$,.0f}<extra>" + name + "</extra>",
+            )
+        )
+
+    fig.add_trace(
+        go.Scatter(
+            x=years,
+            y=df["total"].to_list(),
+            name="net total",
+            mode="lines+markers",
+            line={"width": 2, "color": "black"},
+            marker={"size": 4},
+            hovertemplate="Year %{x}: %{y:$,.0f}<extra>net total</extra>",
+        )
+    )
+
+    value_label = "Annual Net Cashflow (Real $)" if real else "Annual Net Cashflow (Nominal $)"
+    title = "Annual Cashflow Schedule by Account" + (" (Real)" if real else " (Nominal)")
+    fig.update_layout(
+        title=title,
+        barmode="relative",
+        xaxis_title="Year",
+        yaxis_title=value_label,
+        hovermode="x unified",
+        legend={"orientation": "h"},
+    )
+    return fig
+
+
 def plot_expected_return(result: ExpectedReturnResult) -> go.Figure:
     """Horizontal bar chart of per-asset annualised expected returns, sorted descending.
 

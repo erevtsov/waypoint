@@ -135,6 +135,58 @@ def _build_asset_paths(
     return asset_paths
 
 
+def _compute_annual_cashflows(
+    cashflows: list[CashflowDefinition],
+    median_nominal_path: np.ndarray,
+    periods_per_year: int,
+    inflation_rate: float,
+    horizon_years: int,
+) -> list[float]:
+    """Net cashflow for each simulation year using the median nominal portfolio path.
+
+    For ``pct_portfolio`` cashflows the amount at each period is evaluated
+    against the median nominal account value (before any real deflation).
+    Dollar cashflows are deterministic and unaffected by ``median_nominal_path``.
+
+    Parameters
+    ----------
+    cashflows:
+        Cashflow definitions for this account.
+    median_nominal_path:
+        ``(n_periods + 1,)`` array of median total portfolio value in nominal
+        terms at each period.
+    periods_per_year:
+        Number of simulation periods per calendar year.
+    inflation_rate:
+        Annual inflation rate used for real cashflows.
+    horizon_years:
+        Simulation horizon in years.
+
+    Returns
+    -------
+    list[float]
+        Net nominal cashflow for each year 1 … horizon_years.
+    """
+    n_periods = horizon_years * periods_per_year
+    period_inflation = (
+        (1.0 + inflation_rate) ** (1.0 / periods_per_year) if inflation_rate else 1.0
+    )
+    annual_totals: list[float] = []
+    for year in range(1, horizon_years + 1):
+        period_start = (year - 1) * periods_per_year + 1
+        period_end = year * periods_per_year + 1
+        annual_net = 0.0
+        for t in range(period_start, min(period_end, n_periods + 1)):
+            portfolio_value = float(median_nominal_path[t])
+            cumulative_inflation = period_inflation ** t
+            for cf in cashflows:
+                annual_net += cf.amount_at(
+                    t, periods_per_year, portfolio_value, cumulative_inflation
+                )
+        annual_totals.append(annual_net)
+    return annual_totals
+
+
 def _compute_percentiles(
     paths: np.ndarray,
     start_date: date | None = None,
@@ -393,10 +445,18 @@ class MultiWealthSimulationResult:
         Combined simulation result across all accounts.
         ``allocation_dollar`` is keyed by account name (not asset name) and
         shows the percentile distribution of each account's total value.
+    cashflow_schedule:
+        Annual net cashflows by account.  Columns: ``"year"`` (1 …
+        horizon_years), one column per account, and ``"total"`` (row sum).
+        Values follow the ``real`` flag passed to ``compute()``: real terms
+        when ``real=True``, nominal (future dollars) otherwise.
+        ``pct_portfolio`` cashflows are evaluated at the median nominal
+        account value; dollar cashflows are deterministic.
     """
 
     accounts: dict[str, SimulationResult]
     total: SimulationResult
+    cashflow_schedule: pl.DataFrame
 
     def summary(self) -> dict[str, float]:
         """Summary statistics of the total terminal wealth distribution."""
@@ -419,6 +479,12 @@ class MultiWealthSimulationResult:
         from waypoint.analysis.viz import plot_account_trajectories
 
         return plot_account_trajectories(self)
+
+    def plot_cashflow_schedule(self) -> go.Figure:
+        """Stacked bar chart of annual net cashflows by account."""
+        from waypoint.analysis.viz import plot_cashflow_schedule
+
+        return plot_cashflow_schedule(self)
 
 
 @dataclass
@@ -532,6 +598,8 @@ class MultiWealthSimulation:
         # ------------------------------------------------------------------
         account_results: dict[str, SimulationResult] = {}
         account_total_paths: dict[str, np.ndarray] = {}
+        # Nominal annual cashflows per account; deflated to real after the loop.
+        cashflow_schedule_raw: dict[str, list[float]] = {}
 
         for portfolio in aggregate.portfolios:
             account_names = portfolio.names
@@ -544,12 +612,22 @@ class MultiWealthSimulation:
                  for n in account_names]
             )
 
+            acct_cfs = cashflows.get(portfolio.name, [])
             acct_asset_paths = _build_asset_paths(
                 account_draws, initial_values, account_names,
-                cashflows.get(portfolio.name, []),
-                ppy, self.inflation_rate,
+                acct_cfs, ppy, self.inflation_rate,
             )
             # acct_asset_paths: (n_sims, n_periods+1, n_acct_assets)
+
+            # Cashflow schedule: evaluate against median nominal total path
+            # before any real deflation so pct_portfolio amounts are correct.
+            median_nominal_total = np.median(
+                acct_asset_paths.sum(axis=2), axis=0
+            )  # (n_periods+1,)
+            cashflow_schedule_raw[portfolio.name] = _compute_annual_cashflows(
+                acct_cfs, median_nominal_total, ppy,
+                self.inflation_rate, self.horizon_years,
+            )
 
             if real and self.inflation_rate:
                 for t in range(1, n_periods + 1):
@@ -601,4 +679,29 @@ class MultiWealthSimulation:
             is_real=real,
         )
 
-        return MultiWealthSimulationResult(accounts=account_results, total=total_result)
+        # ------------------------------------------------------------------
+        # 5. Build cashflow schedule DataFrame.
+        # ------------------------------------------------------------------
+        account_order = [p.name for p in aggregate.portfolios]
+        years = list(range(1, self.horizon_years + 1))
+        cf_cols: dict[str, list[float]] = {"year": years}  # type: ignore[dict-item]
+        for name in account_order:
+            raw = cashflow_schedule_raw[name]
+            if real and self.inflation_rate:
+                cf_cols[name] = [
+                    v / (1.0 + self.inflation_rate) ** y
+                    for y, v in enumerate(raw, start=1)
+                ]
+            else:
+                cf_cols[name] = raw
+        cf_cols["total"] = [
+            sum(cf_cols[name][i] for name in account_order)
+            for i in range(self.horizon_years)
+        ]
+        cashflow_schedule = pl.DataFrame(cf_cols)
+
+        return MultiWealthSimulationResult(
+            accounts=account_results,
+            total=total_result,
+            cashflow_schedule=cashflow_schedule,
+        )
