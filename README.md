@@ -53,7 +53,7 @@ sim = wp.analytics.WealthSimulation(
     initial_wealth=500_000,
     n_simulations=2000,
     cashflows=[
-        wp.cashflows.PeriodicCashflow(amount=2_000, frequency="monthly", mode="dollar"),
+        wp.cashflows.PeriodicCashflow(amount=2_000, frequency="monthly"),
     ],
 )
 result = sim.compute(portfolio, start="2015-01-01", end="2024-12-31", frequency="monthly")
@@ -106,11 +106,12 @@ rf       = wp.fetch(wp.catalog.indicators.US_10Y_YIELD, start="2024-01-01", end=
 | Constant | Description |
 |---|---|
 | `US_LARGE_CAP` | S&P 500 (`^SPX`, yfinance) |
-| `US_TOTAL_MARKET` | CRSP US Total Market (`^CRSPTM1`, yfinance) |
-| `US_LARGE_CAP_GROWTH` | CRSP US Large Cap Growth (`^CRSPLCG1`, yfinance) |
+| `US_TOTAL_MARKET` | US Total Market (`VTI`, yfinance) |
+| `US_LARGE_CAP_GROWTH` | US Large Cap Growth (`VUG`, yfinance) |
 | `NASDAQ_100` | NASDAQ-100 (`^NDX`, yfinance) |
 | `RUSSELL_1000` | Russell 1000 (`^RUI`, yfinance) |
 | `US_SMALL_CAP` | Russell 2000 (`^RUT`, yfinance) |
+| `US_FINANCIALS` | US Financials (`XLF`, yfinance) |
 | `INTL_DEVELOPED` | MSCI EAFE (`EFA`, yfinance) |
 | `EUROPE_DEVELOPED` | Europe Developed (`VGK`, yfinance) |
 | `EMERGING` | MSCI EM (`EEM`, yfinance) |
@@ -122,6 +123,7 @@ rf       = wp.fetch(wp.catalog.indicators.US_10Y_YIELD, start="2024-01-01", end=
 |---|---|
 | `US_AGG_BONDS` | Bloomberg Aggregate (`AGG`, yfinance) |
 | `US_TIPS` | US TIPS (`TIP`, yfinance) |
+| `RISK_FREE_RATE` | 3-Month T-Bill (`DTB3`, FRED, daily) |
 | `CPI_YOY` | CPI YoY (`CPIAUCSL`, FRED, monthly) |
 
 **`wp.catalog.real_estate`**
@@ -160,8 +162,25 @@ port_returns = portfolio.portfolio_returns(frequency="monthly")
 **Configurable estimation methods** — analytics that need return/risk estimates (e.g. `WealthSimulation`) use the portfolio's configured methods:
 
 ```python
-portfolio.expected_return_method = wp.returns.ArithmeticMean()
-portfolio.risk_method = wp.risk.SampleCovariance()
+portfolio.expected_return_method = wp.returns.ShrinkageTowardGrandMean()
+portfolio.risk_method = wp.risk.LedoitWolf()
+```
+
+### Aggregate
+
+An `Aggregate` groups multiple `Portfolio` instances (e.g. brokerage, 401k, Roth IRA) into a single wealth picture. Each portfolio must have `initial_wealth` set.
+
+```python
+agg = wp.Aggregate([brokerage, portfolio_401k, roth_ira])
+
+# Relative weight of each account by initial wealth
+agg.wealth_weights()   # {"brokerage": 0.25, "401k": 0.65, "roth_ira": 0.10}
+
+# Inspect combined data coverage across all accounts
+agg.data_window(start="2015-01-01", end="2024-12-31", frequency="quarterly")
+
+# Collapse all accounts into a single wealth-weighted portfolio
+flat = agg.flatten()
 ```
 
 ### Analytics
@@ -177,7 +196,16 @@ result.per_asset    # dict[str, float] — annualised per-asset returns
 result.portfolio    # float — weighted portfolio return
 ```
 
-Methods (`wp.returns`): `ArithmeticMean`, `ViewReturn`
+Methods (`wp.returns`):
+
+| Method | Description |
+|---|---|
+| `ArithmeticMean` | Simple arithmetic mean of historical returns |
+| `GeometricMean` | Compound annualised growth rate |
+| `EWMAMean` | Exponentially weighted mean (recent observations upweighted) |
+| `ShrinkageTowardGrandMean` | James-Stein shrinkage toward the cross-sectional mean |
+| `CAPM` | CAPM-implied returns from beta to a market portfolio |
+| `ViewReturn` | Forward-looking expected returns specified directly |
 
 `ViewReturn` — forward-looking expected returns specified directly, ignoring history:
 
@@ -203,7 +231,14 @@ result.volatilities         # dict[str, float] — per-asset annualised volatili
 result.portfolio_volatility # float — sqrt(w^T Σ w)
 ```
 
-Methods (`wp.risk`): `SampleCovariance`, `ViewRisk`
+Methods (`wp.risk`):
+
+| Method | Description |
+|---|---|
+| `SampleCovariance` | Standard sample covariance matrix |
+| `LedoitWolf` | Ledoit-Wolf shrinkage covariance (reduces estimation error) |
+| `EWMACovariance` | Exponentially weighted covariance (recent observations upweighted) |
+| `ViewRisk` | Forward-looking volatilities with historical or manual correlations |
 
 `ViewRisk` — forward-looking risk view: user-specified volatilities combined with a correlation structure (historical or manual):
 
@@ -242,7 +277,7 @@ frontier.plot()
 
 #### Wealth simulation — `wp.analytics.WealthSimulation`
 
-Simulates long-horizon portfolio wealth paths. Uses the portfolio's `expected_return_method` and `risk_method` to estimate parameters from historical data, then draws `n_simulations` paths.
+Simulates long-horizon portfolio wealth paths for a single portfolio. Uses the portfolio's `expected_return_method` and `risk_method` to estimate parameters from historical data, then draws `n_simulations` paths.
 
 ```python
 sim = wp.analytics.WealthSimulation(
@@ -252,16 +287,45 @@ sim = wp.analytics.WealthSimulation(
     n_simulations=2000,
     inflation_rate=0.03,
     cashflows=[
-        wp.cashflows.PeriodicCashflow(amount=-3_000, frequency="monthly", mode="dollar"),
-        wp.cashflows.LumpSum(amount=100_000, period=60),
+        wp.cashflows.PeriodicCashflow(amount=-3_000, frequency="monthly"),
+        wp.cashflows.LumpSum(amount=100_000, at_year=10.0),
     ],
 )
 result = sim.compute(portfolio, start="2015-01-01", end="2024-12-31", frequency="monthly")
 result.summary()   # {"median_terminal": ..., "p5_terminal": ..., "p95_terminal": ...}
 result.plot()      # fan chart
+result.plot_allocation()  # stacked area chart of per-asset dollar values
 ```
 
 Simulation methods (`wp.sim`): `MonteCarlo`, `Bootstrap`
+
+#### Multi-account simulation — `wp.analytics.MultiWealthSimulation`
+
+Simulates wealth across all accounts in an `Aggregate` jointly, preserving cross-asset correlations. Each account has its own cashflow list; all unique assets are drawn from a single correlated return matrix.
+
+```python
+sim = wp.analytics.MultiWealthSimulation(
+    method=wp.sim.MonteCarlo(seed=42),
+    cashflows={
+        "brokerage": brokerage_cashflows,
+        "401k":      cashflows_401k,
+    },
+    horizon_years=30,
+    n_simulations=2000,
+    inflation_rate=0.03,
+)
+result = sim.compute(agg, start="2015-01-01", end="2024-12-31", frequency="quarterly", real=True)
+
+result.total           # SimulationResult — combined wealth path
+result.accounts        # dict[str, SimulationResult] — per-account paths
+result.cashflow_schedule  # pl.DataFrame — net annual cashflows by account
+
+result.plot()                  # total wealth fan chart
+result.plot_accounts()         # per-account median trajectories
+result.plot_cashflow_schedule()  # stacked bar chart of annual cashflows
+```
+
+The `cashflow_schedule` follows the `real` flag: real terms when `real=True`, nominal otherwise.
 
 #### Scenario comparison — `wp.analytics.ComparisonResult`
 
@@ -280,14 +344,46 @@ comparison.plot()
 ```python
 # Recurring cash flow
 wp.cashflows.PeriodicCashflow(
-    amount=2_000,           # positive = contribution, negative = withdrawal
-    frequency="monthly",    # "monthly" or "annual"
-    mode="dollar",          # "dollar", "pct_portfolio", "pct_portfolio_inflation_adjusted"
-    inflation_rate=0.03,    # grows dollar amount at 3%/year
+    amount=2_000,              # positive = contribution, negative = withdrawal
+    frequency="monthly",       # "monthly" or "annual"
+    mode="dollar",             # "dollar" or "pct_portfolio"
+    real=True,                 # scale by cumulative inflation (dollar mode only)
+    effective_tax_rate=0.30,   # gross-up withdrawals for tax (e.g. 401k distribution)
+    start_year=22.0,           # first simulation year this cashflow is active
+    end_year=30.0,             # last simulation year (None = forever)
+    slots=("equities",),       # restrict to specific portfolio slots (None = all)
 )
 
-# One-time lump sum at period t
-wp.cashflows.LumpSum(amount=50_000, period=120)  # period 120 = month 120 = year 10
+# One-time lump sum
+wp.cashflows.LumpSum(
+    amount=50_000,
+    at_year=10.0,              # fires at simulation year 10
+    real=True,                 # scale by cumulative inflation
+)
+```
+
+For `mode="pct_portfolio"`, `amount` is a fraction of the current portfolio value (e.g. `-0.04` withdraws 4% per year). For `real=True` dollar cashflows, the `amount` is in today's dollars and is inflated each period using the simulation's `inflation_rate`.
+
+### Social Security
+
+```python
+# Estimate AIME from a representative salary
+aime = wp.social_security.estimate_aime(annual_salary=150_000, career_years=35)
+
+# Full Retirement Age for a given birth year
+fra = wp.social_security.full_retirement_age(birth_year=1965)
+
+# Monthly benefit at a specific claiming age
+benefit = wp.social_security.monthly_benefit(aime=5_000, birth_year=1965, claim_age=67.0)
+
+# Convert directly to a simulation cashflow (COLA-adjusted real cashflow)
+ss_cf = wp.social_security.as_cashflow(
+    aime=aime,
+    birth_year=1965,
+    claim_age=67.0,
+    real=True,          # COLA-adjusted
+    start_year=31.0,    # simulation year when SS starts
+)
 ```
 
 ### Data fetching
