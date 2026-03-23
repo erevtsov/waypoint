@@ -31,7 +31,7 @@ The full problem remains: minimise `wᵀΣw` subject to the worst-case return co
 
 ### Strategy pattern on `Optimizer`
 
-`Optimizer` gains one new optional field: `solve_method`, defaulting to `ClassicalMV()`. The field accepts any object satisfying the `OptimizationMethod` protocol. Constraints, `return_model`, and `risk_model` remain on `Optimizer` and flow through identically regardless of `solve_method`.
+`Optimizer` gains one new optional field: `solve_method`, using `field(default_factory=ClassicalMV)` so each instance gets its own default. The field accepts any object satisfying the `OptimizationMethod` protocol. Constraints, `return_model`, and `risk_model` remain on `Optimizer` and flow through identically regardless of `solve_method`.
 
 ```python
 opt = wp.analytics.Optimizer(
@@ -43,9 +43,14 @@ opt = wp.analytics.Optimizer(
 frontier = opt.efficient_frontier(portfolio, start, end, frequency="quarterly")
 ```
 
+Existing code with no `solve_method` argument continues to work unchanged — `ClassicalMV` is the default.
+
 ### `OptimizationMethod` protocol
 
+Decorated with `@runtime_checkable` so `isinstance` checks work.
+
 ```python
+@runtime_checkable
 class OptimizationMethod(Protocol):
     def solve_one_point(
         self,
@@ -58,7 +63,9 @@ class OptimizationMethod(Protocol):
         ...
 ```
 
-`Optimizer.efficient_frontier` calls `solve_one_point` for each return target in the linspace loop. The extreme-return probing (`_solve_extreme_return`) is unchanged — it depends only on constraints, not on the solve method.
+`Optimizer.efficient_frontier` calls `solve_one_point` for each return target in the linspace loop. The extreme-return probing (`_solve_extreme_return`) is unchanged — it still uses only `mu`, `constraints`, and a dummy asset-name list, exactly as today.
+
+Both `SolvePointResult` and `OptimizationMethod` are exported from `wp.opt` (see Public namespace).
 
 ### `SolvePointResult`
 
@@ -69,7 +76,7 @@ class SolvePointResult:
     weights: np.ndarray | None   # None when infeasible
     ret: float | None
     risk: float | None
-    reason: str | None           # human-readable explanation when infeasible
+    reason: str | None           # None when feasible; human-readable string when infeasible
 ```
 
 ### `ClassicalMV`
@@ -84,7 +91,25 @@ class RobustMV:
     kappa: float | Literal["auto"] = 0.1
 ```
 
-When `kappa="auto"`, κ is computed as `chi(p, 0.95) / sqrt(T)` — the 95%-confidence radius of the estimation error ellipsoid given T observations of p assets, where `chi(p, 0.95)` is the square root of the 95th percentile of the χ²(p) distribution.
+**`kappa="auto"` resolution:** `Optimizer.efficient_frontier` resolves `"auto"` to a concrete float *before* entering the per-target loop:
+
+```python
+if isinstance(self.solve_method, RobustMV) and self.solve_method.kappa == "auto":
+    T, p = returns_matrix.shape   # T = number of observations, p = number of assets
+    kappa_val = math.sqrt(scipy.stats.chi2.ppf(0.95, df=p)) / math.sqrt(T)
+    effective_method = RobustMV(kappa=kappa_val)
+else:
+    effective_method = self.solve_method
+```
+
+`effective_method` (always a concrete-kappa `RobustMV` or the original object) is passed into each `solve_one_point` call instead of `self.solve_method`.
+
+**Cholesky failure:** If `sigma` is not positive definite, `np.linalg.cholesky` will raise `np.linalg.LinAlgError`. `RobustMV.solve_one_point` catches this and returns:
+
+```python
+SolvePointResult(feasible=False, weights=None, ret=None, risk=None,
+                 reason="sigma is not positive definite — Cholesky decomposition failed")
+```
 
 The SOCP constraint added per frontier point:
 
@@ -95,16 +120,25 @@ The SOCP constraint added per frontier point:
 expressed in cvxpy as:
 
 ```python
-cp.SOC(mu @ w - target_return, kappa * sigma_half @ w)
+sigma_half = np.linalg.cholesky(sigma)   # (p, p) lower-triangular Cholesky factor
+w_var = cp.Variable(n_assets)
+point_constraints: list[Any] = [
+    c for con in constraints for c in con.to_cvxpy(w_var, asset_names)
+]
+# SOC encodes: mu @ w - target_return >= kappa * ||sigma_half @ w||_2
+point_constraints.append(cp.SOC(mu @ w_var - target_return, kappa * sigma_half @ w_var))
+
+objective = cp.Minimize(cp.quad_form(w_var, sigma))
+problem = cp.Problem(objective, point_constraints)
 ```
 
-where `sigma_half` is the Cholesky factor of `sigma`. Exposed as `wp.opt.RobustMV`.
+Exposed as `wp.opt.RobustMV`.
 
 ### Infeasibility feedback
 
 When `solve_one_point` returns `feasible=False`:
 
-1. `Optimizer.efficient_frontier` emits `warnings.warn(reason, stacklevel=2)` — visible in notebooks by default, suppressable.
+1. `Optimizer.efficient_frontier` emits `warnings.warn(reason, stacklevel=2)` once per infeasible point — visible in notebooks by default, suppressable with `warnings.filterwarnings`.
 2. The `(target_return, reason)` pair is appended to `infeasible_points` on `EfficientFrontierResult`.
 
 `EfficientFrontierResult` additions:
@@ -116,15 +150,15 @@ def print_diagnostics(self) -> None:
     """Print a summary of skipped frontier points with their infeasibility reasons."""
 ```
 
-Existing `EfficientFrontierResult` fields (`weights`, `expected_returns`, `risks`, `asset_names`) and methods (`optimal_sharpe`, `portfolio_at`, `min_volatility_portfolio`, `max_sharpe_portfolio`, `plot`) are unchanged.
+Existing `EfficientFrontierResult` fields (`weights`, `expected_returns`, `risks`, `asset_names`) and methods (`optimal_sharpe`, `portfolio_at`, `min_volatility_portfolio`, `max_sharpe_portfolio`, `plot`) are unchanged. The new `infeasible_points` field has a `default_factory`, so existing construction call sites that don't pass it continue to work.
 
 ## Public namespace
 
 New file `src/waypoint/opt.py` following the pattern of `sim.py`, `returns.py`, `risk.py`:
 
 ```python
-from waypoint.analysis.optimizer import ClassicalMV, RobustMV
-__all__ = ["ClassicalMV", "RobustMV"]
+from waypoint.analysis.optimizer import ClassicalMV, OptimizationMethod, RobustMV, SolvePointResult
+__all__ = ["ClassicalMV", "OptimizationMethod", "RobustMV", "SolvePointResult"]
 ```
 
 `wp.opt` added to `src/waypoint/__init__.py` imports and `__all__`.
@@ -147,6 +181,7 @@ __all__ = ["ClassicalMV", "RobustMV"]
 - `RobustMV(kappa="auto")` runs without error and returns a valid frontier
 - Infeasible points appear in `result.infeasible_points` and trigger `warnings.warn`
 - `print_diagnostics()` prints to stdout without error
+- Non-PD sigma causes `RobustMV.solve_one_point` to return `feasible=False` with a descriptive reason
 
 ## Non-goals
 
