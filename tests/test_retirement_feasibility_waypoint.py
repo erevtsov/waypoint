@@ -35,10 +35,10 @@ RETIREMENT_AGE = 65
 HORIZON_AGE = 88
 
 RETIREMENT_YEAR = RETIREMENT_AGE - CURRENT_AGE  # 23
-HORIZON_YEARS = HORIZON_AGE - CURRENT_AGE        # 46
+HORIZON_YEARS = HORIZON_AGE - CURRENT_AGE  # 46
 
 KID_AGE = 10
-KID_COLLEGE_START = 18 - KID_AGE   # 8
+KID_COLLEGE_START = 18 - KID_AGE  # 8
 KID_COLLEGE_END = KID_COLLEGE_START + 4  # 12
 
 INFLATION_RATE = 0.035
@@ -60,6 +60,7 @@ TOTAL_INITIAL_WEALTH = W_BROKERAGE + W_401K + W_ROTH + W_529 + W_HSA  # 467_000
 # ---------------------------------------------------------------------------
 # Synthetic assets (no network access required)
 # ---------------------------------------------------------------------------
+
 
 def _make_monthly_asset(name: str, ticker: str, mean: float, std: float, seed: int) -> Asset:
     """Create a synthetic monthly return Asset covering 2006-01 through 2024-12.
@@ -94,22 +95,23 @@ def _make_monthly_asset(name: str, ticker: str, mean: float, std: float, seed: i
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def assets() -> dict[str, Asset]:
     """Three synthetic assets covering the full data window."""
     return {
-        "us_eq":   _make_monthly_asset("US Equity",   "VTI", mean=0.0065, std=0.040, seed=10),
-        "intl_eq": _make_monthly_asset("Intl Equity", "EFA", mean=0.005,  std=0.042, seed=11),
-        "bonds":   _make_monthly_asset("Bonds",       "AGG", mean=0.0025, std=0.010, seed=12),
+        "us_eq": _make_monthly_asset("US Equity", "VTI", mean=0.0065, std=0.040, seed=10),
+        "intl_eq": _make_monthly_asset("Intl Equity", "EFA", mean=0.005, std=0.042, seed=11),
+        "bonds": _make_monthly_asset("Bonds", "AGG", mean=0.0025, std=0.010, seed=12),
     }
 
 
 @pytest.fixture(scope="module")
 def portfolios(assets: dict[str, Asset]) -> dict[str, wp.Portfolio]:
     """Five account portfolios with realistic allocations and initial balances."""
-    us_eq   = assets["us_eq"]
+    us_eq = assets["us_eq"]
     intl_eq = assets["intl_eq"]
-    bonds   = assets["bonds"]
+    bonds = assets["bonds"]
 
     brokerage = wp.Portfolio(
         slots={"us_eq": us_eq, "intl_eq": intl_eq, "bonds": bonds},
@@ -211,10 +213,10 @@ def cashflow_map() -> dict[str, list]:
     ]
     return {
         "brokerage": brokerage_cfs,
-        "k401":      k401_cfs,
-        "roth":      roth_cfs,
-        "plan529":   plan529_cfs,
-        "hsa":       hsa_cfs,
+        "k401": k401_cfs,
+        "roth": roth_cfs,
+        "plan529": plan529_cfs,
+        "hsa": hsa_cfs,
     }
 
 
@@ -241,6 +243,7 @@ def sim_result(portfolios: dict[str, wp.Portfolio], cashflow_map: dict[str, list
 # ---------------------------------------------------------------------------
 # Structural tests
 # ---------------------------------------------------------------------------
+
 
 def test_total_paths_shape(sim_result) -> None:
     """Total paths array has the correct (n_sims, n_periods+1) shape."""
@@ -277,6 +280,7 @@ def test_is_real_flag(sim_result) -> None:
 # ---------------------------------------------------------------------------
 # Economic sanity tests
 # ---------------------------------------------------------------------------
+
 
 def test_summary_percentile_ordering(sim_result) -> None:
     stats = sim_result.total.summary()
@@ -331,10 +335,10 @@ def test_per_account_initial_wealth_correct(sim_result) -> None:
     """Period-0 of each account should match its configured initial wealth."""
     expected = {
         "brokerage": W_BROKERAGE,
-        "k401":      W_401K,
-        "roth":      W_ROTH,
-        "plan529":   W_529,
-        "hsa":       W_HSA,
+        "k401": W_401K,
+        "roth": W_ROTH,
+        "plan529": W_529,
+        "hsa": W_HSA,
     }
     for name, w in expected.items():
         initial = sim_result.accounts[name].paths[:, 0]

@@ -24,8 +24,7 @@ class FredProvider:
             from fredapi import Fred
         except ImportError as exc:
             raise ImportError(
-                "fredapi is required for this provider. "
-                "Install it with: uv add waypoint[fred]"
+                "fredapi is required for this provider. Install it with: uv add waypoint[fred]"
             ) from exc
 
         api_key = os.environ.get("FRED_API_KEY")
@@ -43,8 +42,7 @@ class FredProvider:
         )
         if series is None or series.empty:
             raise ValueError(
-                f"FRED returned no data for series {symbol!r} "
-                f"between {start} and {end}."
+                f"FRED returned no data for series {symbol!r} between {start} and {end}."
             )
 
         df = pl.DataFrame(

@@ -112,9 +112,7 @@ def fetch(
     if isinstance(instrument, IndicatorDef):
         import polars as pl
 
-        values = raw_df.rename({"close": "value"}).with_columns(
-            pl.col("value").cast(pl.Float64)
-        )
+        values = raw_df.rename({"close": "value"}).with_columns(pl.col("value").cast(pl.Float64))
         return Indicator.from_indicator_def(instrument, values)
 
     if instrument.normalization == "rate_to_daily":

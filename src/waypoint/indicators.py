@@ -42,13 +42,10 @@ class Indicator:
     def __post_init__(self) -> None:
         cols = self.values.columns
         if cols != ["date", "value"]:
-            raise TypeError(
-                f"Indicator.values must have columns ['date', 'value'], got {cols}"
-            )
+            raise TypeError(f"Indicator.values must have columns ['date', 'value'], got {cols}")
         if self.values["date"].dtype != pl.Date:
             raise TypeError(
-                f"Indicator.values['date'] must be pl.Date, "
-                f"got {self.values['date'].dtype}"
+                f"Indicator.values['date'] must be pl.Date, got {self.values['date'].dtype}"
             )
         if self.values["value"].dtype not in (pl.Float32, pl.Float64):
             raise TypeError(
@@ -61,14 +58,10 @@ class Indicator:
         """Return ``["date", "value"]`` filtered to *[start, end]* (inclusive)."""
         start_dt = date.fromisoformat(start) if isinstance(start, str) else start
         end_dt = date.fromisoformat(end) if isinstance(end, str) else end
-        return self.values.filter(
-            (pl.col("date") >= start_dt) & (pl.col("date") <= end_dt)
-        )
+        return self.values.filter((pl.col("date") >= start_dt) & (pl.col("date") <= end_dt))
 
     @classmethod
-    def from_indicator_def(
-        cls, indicator_def: IndicatorDef, values: pl.DataFrame
-    ) -> Indicator:
+    def from_indicator_def(cls, indicator_def: IndicatorDef, values: pl.DataFrame) -> Indicator:
         """Construct an ``Indicator`` from an ``IndicatorDef`` and a values DataFrame."""
         return cls(
             name=indicator_def.name,

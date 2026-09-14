@@ -73,8 +73,7 @@ class PeriodicCashflow:
             object.__setattr__(self, "slots", tuple(self.slots))
         if self.frequency not in CASHFLOW_FREQUENCIES:
             raise ValueError(
-                f"frequency must be one of {sorted(CASHFLOW_FREQUENCIES)}, "
-                f"got {self.frequency!r}"
+                f"frequency must be one of {sorted(CASHFLOW_FREQUENCIES)}, got {self.frequency!r}"
             )
 
     def amount_at(

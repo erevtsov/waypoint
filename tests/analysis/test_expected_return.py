@@ -25,6 +25,7 @@ from waypoint.portfolio import Portfolio
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_asset(name: str, ticker: str, mean: float, n: int = 100, seed: int = 42) -> Asset:
     rng = np.random.default_rng(seed=seed)
     dates = [date(2020, 1, 1) + timedelta(days=i) for i in range(n)]
@@ -47,6 +48,7 @@ def _make_portfolio(
 # ---------------------------------------------------------------------------
 # ArithmeticMean
 # ---------------------------------------------------------------------------
+
 
 def test_historical_mean_value() -> None:
     """ArithmeticMean should return sample mean * periods_per_year."""
@@ -80,6 +82,7 @@ def test_historical_mean_empty_returns_zero() -> None:
 # ExpectedReturn.compute
 # ---------------------------------------------------------------------------
 
+
 def test_expected_return_per_asset_values() -> None:
     """Per-asset values should match calling ArithmeticMean directly."""
     portfolio = _make_portfolio()
@@ -99,9 +102,7 @@ def test_expected_return_portfolio_is_weighted_sum() -> None:
     er = ExpectedReturn(method=ArithmeticMean())
     result = er.compute(portfolio, start=None, end=None, frequency="daily")
 
-    expected_portfolio = (
-        0.6 * result.per_asset["Equities"] + 0.4 * result.per_asset["Bonds"]
-    )
+    expected_portfolio = 0.6 * result.per_asset["Equities"] + 0.4 * result.per_asset["Bonds"]
     assert abs(result.portfolio - expected_portfolio) < 1e-10
 
 
@@ -139,6 +140,7 @@ def test_expected_return_date_filter_respected() -> None:
 # ---------------------------------------------------------------------------
 # GeometricMean
 # ---------------------------------------------------------------------------
+
 
 def test_geometric_mean_constant_returns() -> None:
     """With constant returns r, geometric mean = (1+r)^ppy - 1 exactly."""
@@ -178,6 +180,7 @@ def test_geometric_mean_via_expected_return_analytic() -> None:
 # ---------------------------------------------------------------------------
 # EWMAMean
 # ---------------------------------------------------------------------------
+
 
 def test_ewma_mean_decay_near_one_equals_arithmetic() -> None:
     """With decay_factor ≈ 1 the EWMA approaches the arithmetic mean."""
@@ -225,6 +228,7 @@ def test_ewma_mean_via_expected_return_analytic() -> None:
 # ---------------------------------------------------------------------------
 # ViewReturn
 # ---------------------------------------------------------------------------
+
 
 def test_view_return_returns_specified_values() -> None:
     """ViewReturn must return the pre-specified value, ignoring historical data."""
@@ -285,6 +289,7 @@ def test_view_return_for_portfolio_returns_valid_instance() -> None:
 # CAPM
 # ---------------------------------------------------------------------------
 
+
 def _make_capm_assets(n: int = 300, seed: int = 99) -> tuple[Asset, Asset, Asset, Asset]:
     """Return (market, rf, beta1_asset, beta0_asset) with known properties.
 
@@ -298,22 +303,26 @@ def _make_capm_assets(n: int = 300, seed: int = 99) -> tuple[Asset, Asset, Asset
     rf_vals = [0.0001] * n  # flat risk-free series
 
     market = Asset(
-        name="Market", ticker="MKT",
+        name="Market",
+        ticker="MKT",
         returns=pl.DataFrame({"date": dates, "returns": mkt_vals}),
         frequency="daily",
     )
     rf_asset = Asset(
-        name="RiskFree", ticker="RF",
+        name="RiskFree",
+        ticker="RF",
         returns=pl.DataFrame({"date": dates, "returns": rf_vals}),
         frequency="daily",
     )
     beta1 = Asset(
-        name="Beta1", ticker="B1",
+        name="Beta1",
+        ticker="B1",
         returns=pl.DataFrame({"date": dates, "returns": mkt_vals}),  # identical to market
         frequency="daily",
     )
     beta0 = Asset(
-        name="Beta0", ticker="B0",
+        name="Beta0",
+        ticker="B0",
         returns=pl.DataFrame({"date": dates, "returns": [0.001] * n}),
         frequency="daily",
     )
@@ -381,12 +390,14 @@ def test_capm_no_overlapping_dates_raises() -> None:
     mkt_dates = [date(2021, 6, 1) + timedelta(days=i) for i in range(n)]  # no overlap
 
     port_asset = Asset(
-        name="A", ticker="A",
+        name="A",
+        ticker="A",
         returns=pl.DataFrame({"date": port_dates, "returns": [0.001] * n}),
         frequency="daily",
     )
     market = Asset(
-        name="MKT", ticker="MKT",
+        name="MKT",
+        ticker="MKT",
         returns=pl.DataFrame({"date": mkt_dates, "returns": rng.normal(0.001, 0.01, n).tolist()}),
         frequency="daily",
     )
@@ -409,6 +420,7 @@ def test_capm_method_name() -> None:
 # ---------------------------------------------------------------------------
 # ShrinkageTowardGrandMean / _james_stein_alpha
 # ---------------------------------------------------------------------------
+
 
 def _make_wide(means: list[float], n: int = 200, seed: int = 7) -> pl.DataFrame:
     """Build a wide DataFrame with one column per mean, plus a date column."""
@@ -450,9 +462,7 @@ def test_shrinkage_pulls_extremes_toward_center() -> None:
     portfolio = _make_portfolio(eq_mean=0.001, fi_mean=0.0001)
     raw = ArithmeticMean()
     wide = portfolio.get_returns()
-    raw_spread = abs(
-        raw.compute(wide["Equities"], 252) - raw.compute(wide["Bonds"], 252)
-    )
+    raw_spread = abs(raw.compute(wide["Equities"], 252) - raw.compute(wide["Bonds"], 252))
     result = ExpectedReturn(method=ShrinkageTowardGrandMean(alpha=0.4)).compute(
         portfolio, start=None, end=None, frequency="daily"
     )
@@ -471,12 +481,14 @@ def test_james_stein_alpha_equal_means_returns_zero() -> None:
     """When all means are equal there is no spread to shrink toward; alpha must be 0."""
     n = 200
     dates = [date(2018, 1, 1) + timedelta(days=i) for i in range(n)]
-    wide_flat = pl.DataFrame({
-        "date": dates,
-        "A0": [0.001] * n,
-        "A1": [0.001] * n,
-        "A2": [0.001] * n,
-    })
+    wide_flat = pl.DataFrame(
+        {
+            "date": dates,
+            "A0": [0.001] * n,
+            "A1": [0.001] * n,
+            "A2": [0.001] * n,
+        }
+    )
     alpha = _james_stein_alpha(wide_flat, ["A0", "A1", "A2"])
     assert alpha == 0.0
 
@@ -493,9 +505,7 @@ def test_shrinkage_analytical_default_shrinks_extremes() -> None:
     portfolio = _make_portfolio(eq_mean=0.002, fi_mean=0.0001)
     raw = ArithmeticMean()
     wide = portfolio.get_returns()
-    raw_spread = abs(
-        raw.compute(wide["Equities"], 252) - raw.compute(wide["Bonds"], 252)
-    )
+    raw_spread = abs(raw.compute(wide["Equities"], 252) - raw.compute(wide["Bonds"], 252))
     result = ExpectedReturn(method=ShrinkageTowardGrandMean()).compute(
         portfolio, start=None, end=None, frequency="daily"
     )
@@ -514,11 +524,14 @@ def test_shrinkage_analytical_three_assets() -> None:
     dates = [date(2018, 1, 1) + timedelta(days=i) for i in range(n)]
     assets = {
         f"A{i}": Asset(
-            name=f"A{i}", ticker=f"A{i}",
-            returns=pl.DataFrame({
-                "date": dates,
-                "returns": rng.normal(m, 0.01, n).tolist(),
-            }),
+            name=f"A{i}",
+            ticker=f"A{i}",
+            returns=pl.DataFrame(
+                {
+                    "date": dates,
+                    "returns": rng.normal(m, 0.01, n).tolist(),
+                }
+            ),
             frequency="daily",
         )
         for i, m in enumerate([0.0002, 0.0008, 0.0020])
@@ -532,9 +545,7 @@ def test_shrinkage_analytical_three_assets() -> None:
     result = ExpectedReturn(method=ShrinkageTowardGrandMean()).compute(
         portfolio, start=None, end=None, frequency="daily"
     )
-    shrunk_spread = (
-        max(result.per_asset.values()) - min(result.per_asset.values())
-    )
+    shrunk_spread = max(result.per_asset.values()) - min(result.per_asset.values())
     assert shrunk_spread < raw_spread
 
 

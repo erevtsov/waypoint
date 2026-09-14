@@ -127,17 +127,13 @@ def load_or_fetch(
         if need_before:
             # Gap may be entirely non-trading days (holidays/weekends); skip if empty
             try:
-                new_frames.append(
-                    fetch_fn.fetch_raw(symbol, start, cached_min - timedelta(days=1))
-                )
+                new_frames.append(fetch_fn.fetch_raw(symbol, start, cached_min - timedelta(days=1)))
             except ValueError:
                 pass
         if need_after:
             # Gap may be entirely non-trading days (holidays/weekends); skip if empty
             try:
-                new_frames.append(
-                    fetch_fn.fetch_raw(symbol, cached_max + timedelta(days=1), end)
-                )
+                new_frames.append(fetch_fn.fetch_raw(symbol, cached_max + timedelta(days=1), end))
             except ValueError:
                 pass
 
@@ -146,9 +142,7 @@ def load_or_fetch(
             _write(path, combined)
             cached = combined
 
-        return cached.filter(
-            (pl.col("date") >= start) & (pl.col("date") <= end)
-        )
+        return cached.filter((pl.col("date") >= start) & (pl.col("date") <= end))
 
     # No cache or force_refresh — fetch full range
     fresh: pl.DataFrame = fetch_fn.fetch_raw(symbol, start, end)

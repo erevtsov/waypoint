@@ -61,8 +61,7 @@ class Asset:
             )
         if self.frequency not in ASSET_FREQUENCIES:
             raise ValueError(
-                f"frequency must be one of {sorted(ASSET_FREQUENCIES)}, "
-                f"got {self.frequency!r}"
+                f"frequency must be one of {sorted(ASSET_FREQUENCIES)}, got {self.frequency!r}"
             )
 
     @property
@@ -78,9 +77,7 @@ class Asset:
         """
         start_dt = date.fromisoformat(start) if isinstance(start, str) else start
         end_dt = date.fromisoformat(end) if isinstance(end, str) else end
-        return self.returns.filter(
-            (pl.col("date") >= start_dt) & (pl.col("date") <= end_dt)
-        )
+        return self.returns.filter((pl.col("date") >= start_dt) & (pl.col("date") <= end_dt))
 
     @classmethod
     def from_asset_def(cls, asset_def: AssetDef, returns: pl.DataFrame) -> Asset:

@@ -21,6 +21,7 @@ def _at(cf: PeriodicCashflow | LumpSum, period: int, pv: float = 0.0, ci: float 
 # PeriodicCashflow — dollar mode
 # ---------------------------------------------------------------------------
 
+
 def test_periodic_cashflow_dollar_fires_monthly() -> None:
     """Monthly cashflow should fire at every period when periods_per_year=12."""
     cf = PeriodicCashflow(amount=1000.0, frequency="monthly", mode="dollar")
@@ -57,6 +58,7 @@ def test_periodic_cashflow_negative_is_withdrawal() -> None:
 # PeriodicCashflow — real vs nominal
 # ---------------------------------------------------------------------------
 
+
 def test_periodic_cashflow_real_scales_with_inflation() -> None:
     """real=True scales the dollar amount by cumulative_inflation."""
     cf = PeriodicCashflow(amount=1000.0, frequency="monthly", mode="dollar", real=True)
@@ -81,6 +83,7 @@ def test_periodic_cashflow_pct_portfolio_ignores_real_flag() -> None:
 # ---------------------------------------------------------------------------
 # PeriodicCashflow — effective_tax_rate
 # ---------------------------------------------------------------------------
+
 
 def test_periodic_cashflow_tax_grosses_up_withdrawal() -> None:
     """Withdrawal is grossed up so the portfolio impact covers taxes."""
@@ -113,8 +116,11 @@ def test_periodic_cashflow_zero_tax_rate_unchanged() -> None:
 def test_periodic_cashflow_real_withdrawal_with_tax() -> None:
     """real=True inflation scaling applied before tax gross-up."""
     cf = PeriodicCashflow(
-        amount=-80_000.0, frequency="annual", mode="dollar",
-        real=True, effective_tax_rate=0.25,
+        amount=-80_000.0,
+        frequency="annual",
+        mode="dollar",
+        real=True,
+        effective_tax_rate=0.25,
     )
     ci = 1.1
     # nominal net = -80_000 * 1.1 = -88_000; gross = -88_000 / 0.75
@@ -128,6 +134,7 @@ def test_periodic_cashflow_real_withdrawal_with_tax() -> None:
 # ---------------------------------------------------------------------------
 # PeriodicCashflow — pct_portfolio mode
 # ---------------------------------------------------------------------------
+
 
 def test_periodic_cashflow_pct_portfolio() -> None:
     """pct_portfolio mode returns amount * portfolio_value."""
@@ -152,6 +159,7 @@ def test_periodic_cashflow_pct_portfolio_with_tax() -> None:
 # ---------------------------------------------------------------------------
 # PeriodicCashflow — validation
 # ---------------------------------------------------------------------------
+
 
 def test_periodic_cashflow_monthly_with_quarterly_simulation() -> None:
     """Monthly cashflow bundled into quarterly simulation periods (3 payments/quarter)."""
@@ -194,6 +202,7 @@ def test_periodic_cashflow_is_frozen() -> None:
 # ---------------------------------------------------------------------------
 # LumpSum
 # ---------------------------------------------------------------------------
+
 
 def test_lump_sum_fires_at_target_period() -> None:
     """LumpSum fires exactly at round(at_year * periods_per_year)."""
@@ -266,6 +275,7 @@ def test_lump_sum_real_withdrawal_with_tax() -> None:
 # slots field
 # ---------------------------------------------------------------------------
 
+
 def test_periodic_cashflow_slots_default_none() -> None:
     cf = PeriodicCashflow(amount=1000.0, frequency="monthly")
     assert cf.slots is None
@@ -297,6 +307,7 @@ def test_lump_sum_slots_list_coerced_to_tuple() -> None:
 # PeriodicCashflow — start_year / end_year
 # ---------------------------------------------------------------------------
 
+
 def test_periodic_cashflow_start_year_suppresses_before() -> None:
     """Cashflow does not fire before start_year."""
     cf = PeriodicCashflow(amount=1000.0, frequency="monthly", start_year=2.0)
@@ -327,18 +338,17 @@ def test_periodic_cashflow_end_year_suppresses_after() -> None:
 
 def test_periodic_cashflow_window_fires_only_within_range() -> None:
     """Cashflow is active only within [start_year, end_year]."""
-    cf = PeriodicCashflow(
-        amount=500.0, frequency="monthly", start_year=1.0, end_year=3.0
-    )
-    assert _at(cf, 11) == 0.0   # year 0.917 < start
+    cf = PeriodicCashflow(amount=500.0, frequency="monthly", start_year=1.0, end_year=3.0)
+    assert _at(cf, 11) == 0.0  # year 0.917 < start
     assert abs(_at(cf, 12) - 500.0) < 1e-9  # year 1.0 = start
     assert abs(_at(cf, 36) - 500.0) < 1e-9  # year 3.0 = end
-    assert _at(cf, 37) == 0.0   # year 3.083 > end
+    assert _at(cf, 37) == 0.0  # year 3.083 > end
 
 
 # ---------------------------------------------------------------------------
 # LumpSum — start_year / end_year
 # ---------------------------------------------------------------------------
+
 
 def test_lump_sum_start_year_suppresses_if_at_year_before() -> None:
     """LumpSum with at_year < start_year never fires."""
@@ -361,6 +371,7 @@ def test_lump_sum_fires_when_at_year_within_window() -> None:
 # ---------------------------------------------------------------------------
 # _apply_tax helper
 # ---------------------------------------------------------------------------
+
 
 def test_apply_tax_withdrawal_grosses_up() -> None:
     assert abs(_apply_tax(-80_000.0, 0.25) - (-80_000.0 / 0.75)) < 1e-6

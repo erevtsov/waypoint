@@ -24,15 +24,13 @@ class EodhdProvider:
             from eodhd import APIClient
         except ImportError as exc:
             raise ImportError(
-                "eodhd is required for this provider. "
-                "Install it with: uv add waypoint[eodhd]"
+                "eodhd is required for this provider. Install it with: uv add waypoint[eodhd]"
             ) from exc
 
         api_key = os.environ.get("EODHD_API_KEY")
         if not api_key:
             raise OSError(
-                "EODHD_API_KEY environment variable is not set. "
-                "Obtain a key at https://eodhd.com/"
+                "EODHD_API_KEY environment variable is not set. Obtain a key at https://eodhd.com/"
             )
 
         client = APIClient(api_key)
@@ -44,8 +42,7 @@ class EodhdProvider:
         )
         if not raw:
             raise ValueError(
-                f"EODHD returned no data for symbol {symbol!r} "
-                f"between {start} and {end}."
+                f"EODHD returned no data for symbol {symbol!r} between {start} and {end}."
             )
 
         df = pl.DataFrame(raw)

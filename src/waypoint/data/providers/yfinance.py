@@ -22,8 +22,7 @@ class YFinanceProvider:
             import yfinance as yf
         except ImportError as exc:
             raise ImportError(
-                "yfinance is required for this provider. "
-                "Install it with: uv add waypoint[yfinance]"
+                "yfinance is required for this provider. Install it with: uv add waypoint[yfinance]"
             ) from exc
 
         ticker = yf.Ticker(symbol)
@@ -35,8 +34,7 @@ class YFinanceProvider:
         )
         if raw.empty:
             raise ValueError(
-                f"yfinance returned no data for symbol {symbol!r} "
-                f"between {start} and {end}."
+                f"yfinance returned no data for symbol {symbol!r} between {start} and {end}."
             )
 
         df = pl.from_pandas(raw.reset_index()[["Date", "Close"]])

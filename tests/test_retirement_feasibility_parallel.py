@@ -47,10 +47,10 @@ RETIREMENT_AGE = 65
 HORIZON_AGE = 88
 
 RETIREMENT_YEAR = RETIREMENT_AGE - CURRENT_AGE  # 23
-HORIZON_YEARS = HORIZON_AGE - CURRENT_AGE        # 46
+HORIZON_YEARS = HORIZON_AGE - CURRENT_AGE  # 46
 
 KID_AGE = 10
-KID_COLLEGE_START = 18 - KID_AGE   # 8
+KID_COLLEGE_START = 18 - KID_AGE  # 8
 KID_COLLEGE_END = KID_COLLEGE_START + 4  # 12
 
 INFLATION_RATE = 0.035
@@ -58,13 +58,13 @@ N_SIMULATIONS = 500
 PERIODS_PER_YEAR = 12  # monthly simulation
 
 DATA_START = "2006-01-31"
-DATA_END   = "2024-12-31"
+DATA_END = "2024-12-31"
 
 W_BROKERAGE = 110_000.0
-W_401K      = 310_000.0
-W_ROTH      =  19_000.0
-W_529       =  10_000.0
-W_HSA       =  18_000.0
+W_401K = 310_000.0
+W_ROTH = 19_000.0
+W_529 = 10_000.0
+W_HSA = 18_000.0
 TOTAL_INITIAL_WEALTH = W_BROKERAGE + W_401K + W_ROTH + W_529 + W_HSA  # 467_000
 
 
@@ -72,6 +72,7 @@ TOTAL_INITIAL_WEALTH = W_BROKERAGE + W_401K + W_ROTH + W_529 + W_HSA  # 467_000
 # Synthetic assets — same seeds / parameters as the waypoint test so both
 # tests operate on comparable historical data.
 # ---------------------------------------------------------------------------
+
 
 def _make_monthly_asset(name: str, ticker: str, mean: float, std: float, seed: int) -> Asset:
     """Create a synthetic monthly return Asset covering 2006-01 through 2024-12."""
@@ -105,15 +106,16 @@ def raw_assets() -> dict[str, Asset]:
     is the only waypoint component used in this parallel implementation.
     """
     return {
-        "us_eq":   _make_monthly_asset("US Equity",   "VTI", mean=0.0065, std=0.040, seed=10),
-        "intl_eq": _make_monthly_asset("Intl Equity", "EFA", mean=0.005,  std=0.042, seed=11),
-        "bonds":   _make_monthly_asset("Bonds",       "AGG", mean=0.0025, std=0.010, seed=12),
+        "us_eq": _make_monthly_asset("US Equity", "VTI", mean=0.0065, std=0.040, seed=10),
+        "intl_eq": _make_monthly_asset("Intl Equity", "EFA", mean=0.005, std=0.042, seed=11),
+        "bonds": _make_monthly_asset("Bonds", "AGG", mean=0.0025, std=0.010, seed=12),
     }
 
 
 # ---------------------------------------------------------------------------
 # Parallel simulation: parameter estimation
 # ---------------------------------------------------------------------------
+
 
 def build_return_matrix(assets: list[Asset], start: str, end: str) -> np.ndarray:
     """Inner-join per-asset returns on date and return a (T, n_assets) numpy array.
@@ -122,12 +124,12 @@ def build_return_matrix(assets: list[Asset], start: str, end: str) -> np.ndarray
     analytics methods are called.
     """
     start_dt = date.fromisoformat(start)
-    end_dt   = date.fromisoformat(end)
+    end_dt = date.fromisoformat(end)
 
     frames = [
-        asset.returns
-        .filter((pl.col("date") >= start_dt) & (pl.col("date") <= end_dt))
-        .rename({"returns": asset.ticker})
+        asset.returns.filter((pl.col("date") >= start_dt) & (pl.col("date") <= end_dt)).rename(
+            {"returns": asset.ticker}
+        )
         for asset in assets
     ]
 
@@ -157,7 +159,7 @@ def estimate_params(
     mu_annual : (n_assets,) annualized expected return per asset.
     cov_annual : (n_assets, n_assets) annualized sample covariance matrix.
     """
-    mu_annual  = return_matrix.mean(axis=0) * periods_per_year
+    mu_annual = return_matrix.mean(axis=0) * periods_per_year
     cov_annual = np.cov(return_matrix.T) * periods_per_year
     if cov_annual.ndim == 0:
         cov_annual = cov_annual.reshape(1, 1)
@@ -167,6 +169,7 @@ def estimate_params(
 # ---------------------------------------------------------------------------
 # Parallel simulation: Monte Carlo return draws
 # ---------------------------------------------------------------------------
+
 
 def monte_carlo(
     mu_per_period: np.ndarray,
@@ -205,6 +208,7 @@ def monte_carlo(
 # Parallel simulation: cashflow scheduling
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class CashflowSpec:
     """Minimal cashflow specification for the parallel simulator.
@@ -233,14 +237,14 @@ class CashflowSpec:
         ``None`` = distribute proportionally across all assets.
     """
 
-    amount:             float
-    frequency:          Literal["monthly", "annual"] = "monthly"
-    real:               bool  = False
+    amount: float
+    frequency: Literal["monthly", "annual"] = "monthly"
+    real: bool = False
     effective_tax_rate: float = 0.0
-    start_year:         float | None = None
-    end_year:           float | None = None
-    mode:               Literal["dollar", "pct_portfolio"] = "dollar"
-    target_indices:     tuple[int, ...] | None = None
+    start_year: float | None = None
+    end_year: float | None = None
+    mode: Literal["dollar", "pct_portfolio"] = "dollar"
+    target_indices: tuple[int, ...] | None = None
 
 
 def cashflow_amount_at(
@@ -309,6 +313,7 @@ def cashflow_amount_at(
 # Parallel simulation: wealth path accumulation
 # ---------------------------------------------------------------------------
 
+
 def _distribute_to_targets(
     values: np.ndarray,
     target_indices: list[int],
@@ -370,15 +375,13 @@ def build_wealth_paths(
         if not cashflows:
             continue
 
-        cumulative_inflation = period_inflation ** t
+        cumulative_inflation = period_inflation**t
 
         for cf, target_indices in zip(cashflows, resolved_targets):
             if cf.mode == "pct_portfolio":
                 for sim_idx in range(n_sims):
                     portfolio_value = float(paths[sim_idx, t, :].sum())
-                    amount = cashflow_amount_at(
-                        cf, t, ppy, cumulative_inflation, portfolio_value
-                    )
+                    amount = cashflow_amount_at(cf, t, ppy, cumulative_inflation, portfolio_value)
                     if amount != 0.0:
                         _distribute_to_targets(paths[sim_idx, t, :], target_indices, amount)
             else:
@@ -401,15 +404,16 @@ def build_wealth_paths(
 # Parallel simulation: multi-account driver
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class AccountSpec:
     """One investment account in the parallel multi-account simulation."""
 
-    name:           str
-    assets:         list[Asset]
-    weights:        list[float]   # must sum to 1.0; same order as assets
+    name: str
+    assets: list[Asset]
+    weights: list[float]  # must sum to 1.0; same order as assets
     initial_wealth: float
-    cashflows:      list[CashflowSpec]
+    cashflows: list[CashflowSpec]
 
     # Set by the simulator after the shared universe is built.
     _global_indices: list[int] = field(default_factory=list, init=False, repr=False)
@@ -465,18 +469,18 @@ def simulate_multi_account(
             if asset.ticker not in ticker_to_asset:
                 ticker_to_asset[asset.ticker] = asset
 
-    universe_assets  = list(ticker_to_asset.values())
+    universe_assets = list(ticker_to_asset.values())
     universe_tickers = [a.ticker for a in universe_assets]
-    ticker_to_idx    = {t: i for i, t in enumerate(universe_tickers)}
+    ticker_to_idx = {t: i for i, t in enumerate(universe_tickers)}
 
     for account in accounts:
         account._global_indices = [ticker_to_idx[a.ticker] for a in account.assets]
 
     # 2. Estimate joint parameters from the shared return matrix
-    return_matrix    = build_return_matrix(universe_assets, start, end)
+    return_matrix = build_return_matrix(universe_assets, start, end)
     mu_annual, cov_a = estimate_params(return_matrix, ppy)
-    mu_per_period    = mu_annual / ppy
-    cov_per_period   = cov_a / ppy
+    mu_per_period = mu_annual / ppy
+    cov_per_period = cov_a / ppy
 
     # 3. Single joint draw for all accounts
     n_periods = horizon_years * ppy
@@ -489,9 +493,7 @@ def simulate_multi_account(
     for account in accounts:
         acct_draws = draws[:, :, account._global_indices]
 
-        initial_values = np.array(
-            [w * account.initial_wealth for w in account.weights]
-        )
+        initial_values = np.array([w * account.initial_wealth for w in account.weights])
         acct_asset_paths = build_wealth_paths(
             acct_draws, initial_values, account.cashflows, ppy, inflation_rate
         )
@@ -512,8 +514,8 @@ def summarize(paths: np.ndarray) -> dict[str, float]:
     terminal = paths[:, -1]
     return {
         "median_terminal": float(np.median(terminal)),
-        "p5_terminal":     float(np.percentile(terminal, 5)),
-        "p95_terminal":    float(np.percentile(terminal, 95)),
+        "p5_terminal": float(np.percentile(terminal, 5)),
+        "p95_terminal": float(np.percentile(terminal, 95)),
     }
 
 
@@ -521,12 +523,13 @@ def summarize(paths: np.ndarray) -> dict[str, float]:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def account_specs(raw_assets: dict[str, Asset]) -> list[AccountSpec]:
     """Build account specifications using only the data-layer Asset objects."""
-    us_eq   = raw_assets["us_eq"]
+    us_eq = raw_assets["us_eq"]
     intl_eq = raw_assets["intl_eq"]
-    bonds   = raw_assets["bonds"]
+    bonds = raw_assets["bonds"]
 
     brokerage = AccountSpec(
         name="brokerage",
@@ -646,6 +649,7 @@ def sim_paths(
 # Structural tests
 # ---------------------------------------------------------------------------
 
+
 def test_total_paths_shape(sim_paths: dict[str, np.ndarray]) -> None:
     n_periods = HORIZON_YEARS * PERIODS_PER_YEAR + 1
     assert sim_paths["total"].shape == (N_SIMULATIONS, n_periods)
@@ -669,10 +673,10 @@ def test_initial_wealth_correct(sim_paths: dict[str, np.ndarray]) -> None:
 def test_per_account_initial_wealth(sim_paths: dict[str, np.ndarray]) -> None:
     expected = {
         "brokerage": W_BROKERAGE,
-        "k401":      W_401K,
-        "roth":      W_ROTH,
-        "plan529":   W_529,
-        "hsa":       W_HSA,
+        "k401": W_401K,
+        "roth": W_ROTH,
+        "plan529": W_529,
+        "hsa": W_HSA,
     }
     for name, w in expected.items():
         np.testing.assert_allclose(sim_paths[name][:, 0], w, rtol=1e-10, err_msg=name)
@@ -681,6 +685,7 @@ def test_per_account_initial_wealth(sim_paths: dict[str, np.ndarray]) -> None:
 # ---------------------------------------------------------------------------
 # Economic sanity tests
 # ---------------------------------------------------------------------------
+
 
 def test_median_terminal_wealth_positive(sim_paths: dict[str, np.ndarray]) -> None:
     stats = summarize(sim_paths["total"])
@@ -701,16 +706,16 @@ def test_median_wealth_grows_to_retirement(sim_paths: dict[str, np.ndarray]) -> 
 
 def test_401k_largest_at_retirement(sim_paths: dict[str, np.ndarray]) -> None:
     retirement_period = RETIREMENT_YEAR * PERIODS_PER_YEAR
-    median_401k       = float(np.median(sim_paths["k401"][:, retirement_period]))
-    median_brokerage  = float(np.median(sim_paths["brokerage"][:, retirement_period]))
+    median_401k = float(np.median(sim_paths["k401"][:, retirement_period]))
+    median_brokerage = float(np.median(sim_paths["brokerage"][:, retirement_period]))
     assert median_401k > median_brokerage
 
 
 def test_529_drawn_down_after_college(sim_paths: dict[str, np.ndarray]) -> None:
     college_start_period = KID_COLLEGE_START * PERIODS_PER_YEAR
-    college_end_period   = KID_COLLEGE_END * PERIODS_PER_YEAR
+    college_end_period = KID_COLLEGE_END * PERIODS_PER_YEAR
     median_at_start = float(np.median(sim_paths["plan529"][:, college_start_period]))
-    median_at_end   = float(np.median(sim_paths["plan529"][:, college_end_period]))
+    median_at_end = float(np.median(sim_paths["plan529"][:, college_end_period]))
     assert median_at_end < median_at_start
 
 
@@ -724,6 +729,7 @@ def test_brokerage_positive_at_retirement(sim_paths: dict[str, np.ndarray]) -> N
 # ---------------------------------------------------------------------------
 # Unit tests for parallel helper functions
 # ---------------------------------------------------------------------------
+
 
 def test_build_return_matrix_shape(raw_assets: dict[str, Asset]) -> None:
     matrix = build_return_matrix(list(raw_assets.values()), DATA_START, DATA_END)
@@ -740,7 +746,7 @@ def test_estimate_params_shapes(raw_assets: dict[str, Asset]) -> None:
 
 
 def test_monte_carlo_shape() -> None:
-    mu  = np.array([0.005, 0.004, 0.002])
+    mu = np.array([0.005, 0.004, 0.002])
     cov = np.diag([0.002, 0.0018, 0.0003])
     draws = monte_carlo(mu, cov, n_periods=120, n_simulations=100, seed=1)
     assert draws.shape == (100, 120, 3)
@@ -762,9 +768,9 @@ def test_cashflow_amount_at_annual_fires_yearly() -> None:
 
 def test_cashflow_real_scales_with_inflation() -> None:
     cf = CashflowSpec(amount=10_000.0, frequency="annual", real=True)
-    infl_y1  = (1.0 + INFLATION_RATE) ** 1.0
+    infl_y1 = (1.0 + INFLATION_RATE) ** 1.0
     infl_y10 = (1.0 + INFLATION_RATE) ** 10.0
-    amt_y1  = cashflow_amount_at(cf, 12,  12, infl_y1,  0.0)
+    amt_y1 = cashflow_amount_at(cf, 12, 12, infl_y1, 0.0)
     amt_y10 = cashflow_amount_at(cf, 120, 12, infl_y10, 0.0)
     assert amt_y10 > amt_y1
     assert abs(amt_y1 - 10_000.0 * infl_y1) < 1e-9
@@ -772,11 +778,7 @@ def test_cashflow_real_scales_with_inflation() -> None:
 
 def test_cashflow_start_end_year_filtering() -> None:
     cf = CashflowSpec(amount=1_000.0, frequency="annual", start_year=2.0, end_year=5.0)
-    fired_years = [
-        t / 12
-        for t in range(1, 73)
-        if cashflow_amount_at(cf, t, 12, 1.0, 0.0) != 0.0
-    ]
+    fired_years = [t / 12 for t in range(1, 73) if cashflow_amount_at(cf, t, 12, 1.0, 0.0) != 0.0]
     assert all(2.0 <= y <= 5.0 for y in fired_years)
 
 

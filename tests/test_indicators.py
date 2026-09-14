@@ -53,9 +53,14 @@ def test_get_values_filters_range() -> None:
 
 def test_from_indicator_def() -> None:
     defn = IndicatorDef(
-        name="10Y Yield", symbol="DGS10", vendor="fred",
-        frequency=Frequency.DAILY, unit="percent",
-        asset_class="Macro", sub_asset_class="Risk-Free Rate", geography="US",
+        name="10Y Yield",
+        symbol="DGS10",
+        vendor="fred",
+        frequency=Frequency.DAILY,
+        unit="percent",
+        asset_class="Macro",
+        sub_asset_class="Risk-Free Rate",
+        geography="US",
     )
     ind = Indicator.from_indicator_def(defn, _make_values())
     assert ind.name == "10Y Yield"

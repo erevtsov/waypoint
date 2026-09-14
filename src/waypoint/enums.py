@@ -47,6 +47,4 @@ ASSET_FREQUENCIES: frozenset[Frequency] = frozenset(
 )
 
 #: Frequencies that are valid for ``PeriodicCashflow`` (no WEEKLY / DAILY).
-CASHFLOW_FREQUENCIES: frozenset[Frequency] = frozenset(
-    {Frequency.MONTHLY, Frequency.ANNUAL}
-)
+CASHFLOW_FREQUENCIES: frozenset[Frequency] = frozenset({Frequency.MONTHLY, Frequency.ANNUAL})
