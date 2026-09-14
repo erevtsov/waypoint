@@ -25,6 +25,7 @@ from waypoint.enums import PERIODS_PER_YEAR, CashflowMode, Frequency
 # MultiWealthSimulation)
 # ---------------------------------------------------------------------------
 
+
 def _distribute(
     asset_paths: np.ndarray,
     sim_idx: int,
@@ -77,9 +78,7 @@ def _build_asset_paths(
     asset_paths = np.empty((n_sims, n_periods + 1, n_assets))
     asset_paths[:, 0, :] = initial_values
 
-    period_inflation = (
-        (1.0 + inflation_rate) ** (1.0 / periods_per_year) if inflation_rate else 1.0
-    )
+    period_inflation = (1.0 + inflation_rate) ** (1.0 / periods_per_year) if inflation_rate else 1.0
 
     asset_name_to_idx = {n: i for i, n in enumerate(asset_names)}
     routing: list[list[int]] = []
@@ -96,19 +95,15 @@ def _build_asset_paths(
             routing.append(list(range(n_assets)))
 
     for t in range(1, n_periods + 1):
-        asset_paths[:, t, :] = asset_paths[:, t - 1, :] * (
-            1.0 + per_asset_returns[:, t - 1, :]
-        )
+        asset_paths[:, t, :] = asset_paths[:, t - 1, :] * (1.0 + per_asset_returns[:, t - 1, :])
 
         if not cashflows:
             continue
 
-        cumulative_inflation = period_inflation ** t
+        cumulative_inflation = period_inflation**t
 
         for cf, target_indices in zip(cashflows, routing):
-            is_pct_mode = (
-                isinstance(cf, PeriodicCashflow) and cf.mode != CashflowMode.DOLLAR
-            )
+            is_pct_mode = isinstance(cf, PeriodicCashflow) and cf.mode != CashflowMode.DOLLAR
 
             if is_pct_mode:
                 for sim_idx in range(n_sims):
@@ -168,9 +163,7 @@ def _compute_annual_cashflows(
         Net nominal cashflow for each year 1 … horizon_years.
     """
     n_periods = horizon_years * periods_per_year
-    period_inflation = (
-        (1.0 + inflation_rate) ** (1.0 / periods_per_year) if inflation_rate else 1.0
-    )
+    period_inflation = (1.0 + inflation_rate) ** (1.0 / periods_per_year) if inflation_rate else 1.0
     annual_totals: list[float] = []
     for year in range(1, horizon_years + 1):
         period_start = (year - 1) * periods_per_year + 1
@@ -178,7 +171,7 @@ def _compute_annual_cashflows(
         annual_net = 0.0
         for t in range(period_start, min(period_end, n_periods + 1)):
             portfolio_value = float(median_nominal_path[t])
-            cumulative_inflation = period_inflation ** t
+            cumulative_inflation = period_inflation**t
             for cf in cashflows:
                 annual_net += cf.amount_at(
                     t, periods_per_year, portfolio_value, cumulative_inflation
@@ -233,6 +226,7 @@ def _compute_percentiles(
 # ---------------------------------------------------------------------------
 # Single-portfolio simulation
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class SimulationResult:
@@ -377,9 +371,7 @@ class WealthSimulation:
             portfolio, start, end, frequency=freq
         )
 
-        mu_per_period = np.array(
-            [er_result.per_asset[n] / periods_per_year for n in asset_names]
-        )
+        mu_per_period = np.array([er_result.per_asset[n] / periods_per_year for n in asset_names])
         sigma_per_period = risk_result.covariance.to_numpy() / periods_per_year
 
         n_periods = self.horizon_years * periods_per_year
@@ -393,8 +385,12 @@ class WealthSimulation:
 
         cashflows = self.cashflows or []
         asset_paths = _build_asset_paths(
-            raw_draws, initial_values, asset_names, cashflows,
-            periods_per_year, self.inflation_rate,
+            raw_draws,
+            initial_values,
+            asset_names,
+            cashflows,
+            periods_per_year,
+            self.inflation_rate,
         )
 
         if real and self.inflation_rate:
@@ -432,6 +428,7 @@ class WealthSimulation:
 # ---------------------------------------------------------------------------
 # Multi-account simulation
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class MultiWealthSimulationResult:
@@ -570,13 +567,9 @@ class MultiWealthSimulation:
         er_result = ExpectedReturn(method=flat.expected_return_method).compute(
             flat, start, end, frequency=freq
         )
-        risk_result = Risk(method=flat.risk_method).compute(
-            flat, start, end, frequency=freq
-        )
+        risk_result = Risk(method=flat.risk_method).compute(flat, start, end, frequency=freq)
 
-        mu_per_period = np.array(
-            [er_result.per_asset[n] / ppy for n in all_asset_names]
-        )
+        mu_per_period = np.array([er_result.per_asset[n] / ppy for n in all_asset_names])
         sigma_per_period = risk_result.covariance.to_numpy() / ppy
 
         # ------------------------------------------------------------------
@@ -586,9 +579,7 @@ class MultiWealthSimulation:
             mu_per_period, sigma_per_period, n_periods, self.n_simulations
         )
         if raw_draws.ndim == 2:
-            raw_draws = np.repeat(
-                raw_draws[:, :, np.newaxis], len(all_asset_names), axis=2
-            )
+            raw_draws = np.repeat(raw_draws[:, :, np.newaxis], len(all_asset_names), axis=2)
         # raw_draws: (n_sims, n_periods, n_unique_assets)
 
         asset_idx = {name: i for i, name in enumerate(all_asset_names)}
@@ -608,41 +599,44 @@ class MultiWealthSimulation:
             account_draws = raw_draws[:, :, indices]  # (n_sims, n_periods, n_acct_assets)
 
             initial_values = np.array(
-                [portfolio.weights[n] * portfolio.initial_wealth  # type: ignore[operator]
-                 for n in account_names]
+                [
+                    portfolio.weights[n] * portfolio.initial_wealth  # type: ignore[operator]
+                    for n in account_names
+                ]
             )
 
             acct_cfs = cashflows.get(portfolio.name, [])
             acct_asset_paths = _build_asset_paths(
-                account_draws, initial_values, account_names,
-                acct_cfs, ppy, self.inflation_rate,
+                account_draws,
+                initial_values,
+                account_names,
+                acct_cfs,
+                ppy,
+                self.inflation_rate,
             )
             # acct_asset_paths: (n_sims, n_periods+1, n_acct_assets)
 
             # Cashflow schedule: evaluate against median nominal total path
             # before any real deflation so pct_portfolio amounts are correct.
-            median_nominal_total = np.median(
-                acct_asset_paths.sum(axis=2), axis=0
-            )  # (n_periods+1,)
+            median_nominal_total = np.median(acct_asset_paths.sum(axis=2), axis=0)  # (n_periods+1,)
             cashflow_schedule_raw[portfolio.name] = _compute_annual_cashflows(
-                acct_cfs, median_nominal_total, ppy,
-                self.inflation_rate, self.horizon_years,
+                acct_cfs,
+                median_nominal_total,
+                ppy,
+                self.inflation_rate,
+                self.horizon_years,
             )
 
             if real and self.inflation_rate:
                 for t in range(1, n_periods + 1):
-                    acct_asset_paths[:, t, :] /= (
-                        (1.0 + self.inflation_rate) ** (t / ppy)
-                    )
+                    acct_asset_paths[:, t, :] /= (1.0 + self.inflation_rate) ** (t / ppy)
 
             acct_paths = acct_asset_paths.sum(axis=2)  # (n_sims, n_periods+1)
             account_total_paths[portfolio.name] = acct_paths
 
             acct_percentile_df = _compute_percentiles(acct_paths, parsed_start, ppy)
             acct_alloc = {
-                name: _compute_percentiles(
-                    acct_asset_paths[:, :, i], parsed_start, ppy
-                )
+                name: _compute_percentiles(acct_asset_paths[:, :, i], parsed_start, ppy)
                 for i, name in enumerate(account_names)
             }
 
@@ -689,14 +683,12 @@ class MultiWealthSimulation:
             raw = cashflow_schedule_raw[name]
             if real and self.inflation_rate:
                 cf_cols[name] = [
-                    v / (1.0 + self.inflation_rate) ** y
-                    for y, v in enumerate(raw, start=1)
+                    v / (1.0 + self.inflation_rate) ** y for y, v in enumerate(raw, start=1)
                 ]
             else:
                 cf_cols[name] = raw
         cf_cols["total"] = [
-            sum(cf_cols[name][i] for name in account_order)
-            for i in range(self.horizon_years)
+            sum(cf_cols[name][i] for name in account_order) for i in range(self.horizon_years)
         ]
         cashflow_schedule = pl.DataFrame(cf_cols)
 

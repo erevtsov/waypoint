@@ -104,13 +104,10 @@ class Risk:
         portfolio_volatility = math.sqrt(max(portfolio_variance, 0.0))
 
         volatilities: dict[str, float] = {
-            name: math.sqrt(max(float(sigma[i, i]), 0.0))
-            for i, name in enumerate(asset_cols)
+            name: math.sqrt(max(float(sigma[i, i]), 0.0)) for i, name in enumerate(asset_cols)
         }
 
-        cov_df = pl.DataFrame(
-            {name: sigma[:, i].tolist() for i, name in enumerate(asset_cols)}
-        )
+        cov_df = pl.DataFrame({name: sigma[:, i].tolist() for i, name in enumerate(asset_cols)})
 
         return RiskResult(
             covariance=cov_df,

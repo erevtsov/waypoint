@@ -61,13 +61,10 @@ class AssetDef:
     def __post_init__(self) -> None:
         object.__setattr__(self, "frequency", Frequency(self.frequency))
         if self.vendor not in VALID_VENDORS:
-            raise ValueError(
-                f"vendor must be one of {sorted(VALID_VENDORS)}, got {self.vendor!r}"
-            )
+            raise ValueError(f"vendor must be one of {sorted(VALID_VENDORS)}, got {self.vendor!r}")
         if self.frequency not in ASSET_FREQUENCIES:
             raise ValueError(
-                f"frequency must be one of {sorted(ASSET_FREQUENCIES)}, "
-                f"got {self.frequency!r}"
+                f"frequency must be one of {sorted(ASSET_FREQUENCIES)}, got {self.frequency!r}"
             )
         if self.normalization not in VALID_NORMALIZATIONS:
             raise ValueError(

@@ -36,7 +36,8 @@ def _make_asset(name: str, ticker: str, mean: float, std: float, seed: int) -> A
     dates = [date(2010, 1, 4) + timedelta(days=i) for i in range(n)]
     values = rng.normal(mean, std, n).tolist()
     return Asset(
-        name=name, ticker=ticker,
+        name=name,
+        ticker=ticker,
         returns=pl.DataFrame({"date": dates, "returns": values}),
         frequency="daily",
     )
@@ -71,6 +72,7 @@ def _make_simulation(
 # ---------------------------------------------------------------------------
 # Shape and structure
 # ---------------------------------------------------------------------------
+
 
 def test_paths_shape() -> None:
     """paths must have shape (n_simulations, horizon_years * periods_per_year + 1)."""
@@ -112,6 +114,7 @@ def test_percentile_ordering() -> None:
 # Economic properties
 # ---------------------------------------------------------------------------
 
+
 def test_median_path_grows_with_positive_mu() -> None:
     """With positive expected return and no cashflows, median terminal > initial."""
     result = _make_simulation(positive_mu=True)
@@ -145,6 +148,7 @@ def test_cashflows_increase_terminal_wealth_for_contributions() -> None:
 # summary()
 # ---------------------------------------------------------------------------
 
+
 def test_summary_keys() -> None:
     result = _make_simulation()
     summary = result.summary()
@@ -162,6 +166,7 @@ def test_summary_ordering() -> None:
 # ---------------------------------------------------------------------------
 # Bootstrap method
 # ---------------------------------------------------------------------------
+
 
 def test_bootstrap_shape() -> None:
     """Bootstrap simulation must produce paths with the correct shape."""
@@ -182,6 +187,7 @@ def test_bootstrap_shape() -> None:
 # SimulationResult frozen
 # ---------------------------------------------------------------------------
 
+
 def test_simulation_result_is_frozen() -> None:
     result = _make_simulation()
     with pytest.raises((AttributeError, TypeError)):
@@ -191,6 +197,7 @@ def test_simulation_result_is_frozen() -> None:
 # ---------------------------------------------------------------------------
 # Per-asset allocation
 # ---------------------------------------------------------------------------
+
 
 def test_allocation_dollar_keys_match_portfolio() -> None:
     """allocation_dollar must have one entry per portfolio slot."""
@@ -232,7 +239,10 @@ def test_allocation_dollar_has_same_date_column_as_percentile_df() -> None:
         n_simulations=N_SIMULATIONS,
     )
     result = sim.compute(
-        portfolio, start=None, end=None, frequency="daily",
+        portfolio,
+        start=None,
+        end=None,
+        frequency="daily",
         start_date=date(2025, 1, 1),
     )
     for df in result.allocation_dollar.values():
@@ -242,6 +252,7 @@ def test_allocation_dollar_has_same_date_column_as_percentile_df() -> None:
 # ---------------------------------------------------------------------------
 # Cashflow routing via slots
 # ---------------------------------------------------------------------------
+
 
 def _make_zero_return_asset(name: str, ticker: str, n: int = 200) -> Asset:
     """Asset with exactly zero returns every period."""
@@ -319,6 +330,7 @@ def test_cashflow_routing_invalid_slot_raises() -> None:
 # start_date — date x-axis
 # ---------------------------------------------------------------------------
 
+
 def test_percentile_df_has_date_column_when_start_date_given() -> None:
     portfolio = _make_portfolio()
     sim = WealthSimulation(
@@ -328,7 +340,10 @@ def test_percentile_df_has_date_column_when_start_date_given() -> None:
         n_simulations=N_SIMULATIONS,
     )
     result = sim.compute(
-        portfolio, start=None, end=None, frequency="daily",
+        portfolio,
+        start=None,
+        end=None,
+        frequency="daily",
         start_date=date(2025, 1, 1),
     )
     assert "date" in result.percentile_df.columns
@@ -351,7 +366,10 @@ def test_start_date_first_row_equals_start_date() -> None:
         n_simulations=N_SIMULATIONS,
     )
     result = sim.compute(
-        portfolio, start=None, end=None, frequency="daily",
+        portfolio,
+        start=None,
+        end=None,
+        frequency="daily",
         start_date=start,
     )
     assert result.percentile_df["date"][0] == start
@@ -366,7 +384,10 @@ def test_start_date_accepts_string() -> None:
         n_simulations=N_SIMULATIONS,
     )
     result = sim.compute(
-        portfolio, start=None, end=None, frequency="daily",
+        portfolio,
+        start=None,
+        end=None,
+        frequency="daily",
         start_date="2025-01-01",
     )
     assert result.start_date == date(2025, 1, 1)
@@ -376,6 +397,7 @@ def test_start_date_accepts_string() -> None:
 # ---------------------------------------------------------------------------
 # real mode
 # ---------------------------------------------------------------------------
+
 
 def test_real_mode_reduces_terminal_wealth() -> None:
     """Real paths must be smaller than nominal when inflation_rate > 0."""
@@ -428,6 +450,7 @@ def test_zero_inflation_real_equals_nominal() -> None:
 # MultiWealthSimulation helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_zero_return_portfolio(
     name: str,
     initial_wealth: float,
@@ -442,8 +465,10 @@ def _make_zero_return_portfolio(
         dates = [date(2010, 1, 1) + timedelta(days=j) for j in range(n)]
         returns = pl.DataFrame({"date": dates, "returns": [0.0] * n})
         assets[sn] = Asset(
-            name=sn, ticker=sn.upper(),
-            returns=returns, frequency="daily",
+            name=sn,
+            ticker=sn.upper(),
+            returns=returns,
+            frequency="daily",
         )
         weights[sn] = 1.0 / len(slot_names)
     return Portfolio(assets, weights=weights, name=name, initial_wealth=initial_wealth)
@@ -451,28 +476,38 @@ def _make_zero_return_portfolio(
 
 def _make_aggregate() -> Aggregate:
     eq = Asset(
-        name="EQ", ticker="EQ",
-        returns=pl.DataFrame({
-            "date": [date(2010, 1, 1) + timedelta(days=i) for i in range(300)],
-            "returns": np.random.default_rng(1).normal(0.001, 0.01, 300).tolist(),
-        }),
+        name="EQ",
+        ticker="EQ",
+        returns=pl.DataFrame(
+            {
+                "date": [date(2010, 1, 1) + timedelta(days=i) for i in range(300)],
+                "returns": np.random.default_rng(1).normal(0.001, 0.01, 300).tolist(),
+            }
+        ),
         frequency="daily",
     )
     fi = Asset(
-        name="FI", ticker="FI",
-        returns=pl.DataFrame({
-            "date": [date(2010, 1, 1) + timedelta(days=i) for i in range(300)],
-            "returns": np.random.default_rng(2).normal(0.0003, 0.003, 300).tolist(),
-        }),
+        name="FI",
+        ticker="FI",
+        returns=pl.DataFrame(
+            {
+                "date": [date(2010, 1, 1) + timedelta(days=i) for i in range(300)],
+                "returns": np.random.default_rng(2).normal(0.0003, 0.003, 300).tolist(),
+            }
+        ),
         frequency="daily",
     )
     taxable = Portfolio(
-        {"EQ": eq, "FI": fi}, weights={"EQ": 0.7, "FI": 0.3},
-        name="taxable", initial_wealth=600_000.0,
+        {"EQ": eq, "FI": fi},
+        weights={"EQ": 0.7, "FI": 0.3},
+        name="taxable",
+        initial_wealth=600_000.0,
     )
     retirement = Portfolio(
-        {"EQ": eq, "FI": fi}, weights={"EQ": 0.6, "FI": 0.4},
-        name="401k", initial_wealth=400_000.0,
+        {"EQ": eq, "FI": fi},
+        weights={"EQ": 0.6, "FI": 0.4},
+        name="401k",
+        initial_wealth=400_000.0,
     )
     return Aggregate([taxable, retirement])
 
@@ -480,6 +515,7 @@ def _make_aggregate() -> Aggregate:
 # ---------------------------------------------------------------------------
 # MultiWealthSimulation — structure
 # ---------------------------------------------------------------------------
+
 
 def test_multi_result_has_all_accounts() -> None:
     agg = _make_aggregate()
@@ -527,9 +563,7 @@ def test_multi_total_equals_sum_of_accounts() -> None:
     agg = _make_aggregate()
     sim = MultiWealthSimulation(method=MonteCarlo(seed=42), horizon_years=5, n_simulations=50)
     result = sim.compute(agg, start=None, end=None, frequency="monthly")
-    reconstructed = (
-        result.accounts["taxable"].paths + result.accounts["401k"].paths
-    )
+    reconstructed = result.accounts["taxable"].paths + result.accounts["401k"].paths
     np.testing.assert_allclose(result.total.paths, reconstructed, rtol=1e-9)
 
 
@@ -545,6 +579,7 @@ def test_multi_total_allocation_dollar_keyed_by_account() -> None:
 # MultiWealthSimulation — cashflows routed per account
 # ---------------------------------------------------------------------------
 
+
 def test_multi_account_cashflow_only_affects_target_account() -> None:
     """A cashflow for 'taxable' must not change '401k' balance."""
     n = 300
@@ -553,16 +588,12 @@ def test_multi_account_cashflow_only_affects_target_account() -> None:
     eq = Asset(name="EQ", ticker="EQ", returns=zero_returns, frequency="daily")
 
     taxable = Portfolio({"EQ": eq}, weights={"EQ": 1.0}, name="taxable", initial_wealth=500_000.0)
-    retirement = Portfolio(
-        {"EQ": eq}, weights={"EQ": 1.0}, name="401k", initial_wealth=300_000.0
-    )
+    retirement = Portfolio({"EQ": eq}, weights={"EQ": 1.0}, name="401k", initial_wealth=300_000.0)
     agg = Aggregate([taxable, retirement])
 
     contribution = PeriodicCashflow(amount=1_000.0, frequency="monthly", mode="dollar")
     sim = MultiWealthSimulation(
-        method=Bootstrap(
-            historical_returns=np.zeros(300), block_size=5, seed=42
-        ),
+        method=Bootstrap(historical_returns=np.zeros(300), block_size=5, seed=42),
         cashflows={"taxable": [contribution]},
         horizon_years=2,
         n_simulations=20,
@@ -583,10 +614,13 @@ def test_multi_account_cashflow_only_affects_target_account() -> None:
 # MultiWealthSimulation — is_real flag
 # ---------------------------------------------------------------------------
 
+
 def test_multi_real_mode_reduces_terminal_wealth() -> None:
     agg = _make_aggregate()
     sim = MultiWealthSimulation(
-        method=MonteCarlo(seed=42), horizon_years=5, n_simulations=50,
+        method=MonteCarlo(seed=42),
+        horizon_years=5,
+        n_simulations=50,
         inflation_rate=0.03,
     )
     nominal = sim.compute(agg, start=None, end=None, frequency="monthly", real=False)

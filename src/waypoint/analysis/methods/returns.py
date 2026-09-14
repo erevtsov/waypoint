@@ -297,9 +297,7 @@ class CAPM:
         mkt_df = self.market.returns.rename({"returns": "__market__"})
         aligned = wide.join(mkt_df, on="date", how="inner")
         if len(aligned) == 0:
-            raise ValueError(
-                "CAPM: no overlapping dates between portfolio and market asset."
-            )
+            raise ValueError("CAPM: no overlapping dates between portfolio and market asset.")
 
         # Optionally align risk-free returns.
         if isinstance(self.risk_free, float):
@@ -309,12 +307,9 @@ class CAPM:
             aligned = aligned.join(rf_df, on="date", how="inner")
             if len(aligned) == 0:
                 raise ValueError(
-                    "CAPM: no overlapping dates between portfolio, market, "
-                    "and risk-free asset."
+                    "CAPM: no overlapping dates between portfolio, market, and risk-free asset."
                 )
-            rf_annualised = self.market_return_method.compute(
-                aligned["__rf__"], periods_per_year
-            )
+            rf_annualised = self.market_return_method.compute(aligned["__rf__"], periods_per_year)
 
         mkt_returns = aligned["__market__"].to_numpy()
         e_rm = self.market_return_method.compute(aligned["__market__"], periods_per_year)
@@ -429,14 +424,7 @@ class ShrinkageTowardGrandMean:
         arrays = {col: wide[col].drop_nulls().to_numpy() for col in asset_cols}
         raw_means = {col: float(np.mean(a)) * periods_per_year for col, a in arrays.items()}
 
-        alpha = (
-            self.alpha
-            if self.alpha is not None
-            else _james_stein_alpha(wide, asset_cols)
-        )
+        alpha = self.alpha if self.alpha is not None else _james_stein_alpha(wide, asset_cols)
         grand_mean = sum(raw_means.values()) / len(raw_means)
 
-        return {
-            col: (1.0 - alpha) * raw_means[col] + alpha * grand_mean
-            for col in asset_cols
-        }
+        return {col: (1.0 - alpha) * raw_means[col] + alpha * grand_mean for col in asset_cols}

@@ -11,6 +11,7 @@ from waypoint.constraints import DEFAULT_CONSTRAINTS, LongOnly, SumToOne, Weight
 # LongOnly
 # ---------------------------------------------------------------------------
 
+
 def test_long_only_produces_one_constraint() -> None:
     w = cp.Variable(3)
     constraints = LongOnly().to_cvxpy(w, ["A", "B", "C"])
@@ -32,6 +33,7 @@ def test_long_only_enforces_non_negative() -> None:
 # ---------------------------------------------------------------------------
 # WeightBounds
 # ---------------------------------------------------------------------------
+
 
 def test_weight_bounds_produces_two_constraints() -> None:
     w = cp.Variable(2)
@@ -71,6 +73,7 @@ def test_weight_bounds_default_values() -> None:
 # SumToOne
 # ---------------------------------------------------------------------------
 
+
 def test_sum_to_one_produces_one_constraint() -> None:
     w = cp.Variable(3)
     constraints = SumToOne().to_cvxpy(w, ["A", "B", "C"])
@@ -92,6 +95,7 @@ def test_sum_to_one_enforces_equality() -> None:
 # ---------------------------------------------------------------------------
 # DEFAULT_CONSTRAINTS
 # ---------------------------------------------------------------------------
+
 
 def test_default_constraints_are_long_only_and_sum_to_one() -> None:
     types = {type(c) for c in DEFAULT_CONSTRAINTS}

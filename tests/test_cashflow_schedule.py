@@ -16,6 +16,7 @@ from waypoint.assets import Asset
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_asset(name: str, ticker: str, n_months: int = 120, seed: int = 0) -> Asset:
     rng = np.random.default_rng(seed=seed)
     dates: list[date] = []
@@ -25,9 +26,12 @@ def _make_asset(name: str, ticker: str, n_months: int = 120, seed: int = 0) -> A
         eom = date(year, month + 1, 1) - timedelta(days=1) if month < 12 else date(year, 12, 31)
         dates.append(eom)
     returns = rng.normal(0.006, 0.03, n_months).tolist()
-    return Asset(name=name, ticker=ticker,
-                 returns=pl.DataFrame({"date": dates, "returns": returns}),
-                 frequency="monthly")
+    return Asset(
+        name=name,
+        ticker=ticker,
+        returns=pl.DataFrame({"date": dates, "returns": returns}),
+        frequency="monthly",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -45,21 +49,23 @@ def two_account_result():
     eq = _make_asset("Equity", "EQ", seed=1)
 
     acct_a = wp.Portfolio(
-        slots={"eq": eq}, weights={"eq": 1.0},
-        name="acct_a", initial_wealth=100_000.0,
+        slots={"eq": eq},
+        weights={"eq": 1.0},
+        name="acct_a",
+        initial_wealth=100_000.0,
     )
     acct_b = wp.Portfolio(
-        slots={"eq": eq}, weights={"eq": 1.0},
-        name="acct_b", initial_wealth=50_000.0,
+        slots={"eq": eq},
+        weights={"eq": 1.0},
+        name="acct_b",
+        initial_wealth=50_000.0,
     )
     agg = wp.Aggregate([acct_a, acct_b])
 
     cashflows = {
         "acct_a": [
             # Fixed annual contribution of $10k real
-            wp.cashflows.PeriodicCashflow(
-                amount=10_000.0, frequency="annual", real=True
-            ),
+            wp.cashflows.PeriodicCashflow(amount=10_000.0, frequency="annual", real=True),
         ],
         "acct_b": [
             # Withdrawal of $5k real starting year 3
@@ -76,13 +82,13 @@ def two_account_result():
         n_simulations=N_SIMS,
         inflation_rate=INFLATION,
     )
-    return sim.compute(agg, start="2010-01-31", end="2019-12-31",
-                       frequency="monthly", real=True)
+    return sim.compute(agg, start="2010-01-31", end="2019-12-31", frequency="monthly", real=True)
 
 
 # ---------------------------------------------------------------------------
 # Structure tests
 # ---------------------------------------------------------------------------
+
 
 def test_cashflow_schedule_row_count(two_account_result) -> None:
     """One row per year in the horizon."""
@@ -115,6 +121,7 @@ def test_cashflow_schedule_total_equals_sum(two_account_result) -> None:
 # ---------------------------------------------------------------------------
 # Economic sanity
 # ---------------------------------------------------------------------------
+
 
 def test_acct_a_contributions_positive_all_years(two_account_result) -> None:
     """acct_a has only contributions — all annual values should be positive."""
@@ -153,6 +160,7 @@ def test_cashflow_schedule_is_real(two_account_result) -> None:
 # Unit tests for _compute_annual_cashflows
 # ---------------------------------------------------------------------------
 
+
 def test_compute_annual_cashflows_dollar_no_inflation() -> None:
     """A fixed $1k/year contribution sums to $1k per year exactly."""
     cf = wp.cashflows.PeriodicCashflow(amount=1_000.0, frequency="annual", real=False)
@@ -180,10 +188,10 @@ def test_compute_annual_cashflows_start_year() -> None:
     )
     path = np.full(49, 100_000.0)  # 4 years monthly (ppy=12)
     result = _compute_annual_cashflows([cf], path, 12, 0.0, 4)
-    assert result[0] == 0.0    # year 1: current_year(12/12=1.0) < 2.0 → zero
-    assert result[1] > 0.0     # year 2: current_year(24/12=2.0) == start → fires
-    assert result[2] > 0.0    # year 3
-    assert result[3] > 0.0    # year 4
+    assert result[0] == 0.0  # year 1: current_year(12/12=1.0) < 2.0 → zero
+    assert result[1] > 0.0  # year 2: current_year(24/12=2.0) == start → fires
+    assert result[2] > 0.0  # year 3
+    assert result[3] > 0.0  # year 4
 
 
 def test_compute_annual_cashflows_pct_portfolio() -> None:

@@ -325,9 +325,8 @@ def plot_wealth_simulation(result: SimulationResult) -> go.Figure:
     x_values, xaxis_cfg = _year_x(result)
 
     value_label = "Portfolio Value (Real)" if result.is_real else "Portfolio Value (Nominal)"
-    title = (
-        "Wealth Simulation — Percentile Fan Chart"
-        + (" (Real)" if result.is_real else " (Nominal)")
+    title = "Wealth Simulation — Percentile Fan Chart" + (
+        " (Real)" if result.is_real else " (Nominal)"
     )
 
     fig = go.Figure()

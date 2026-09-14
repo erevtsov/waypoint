@@ -245,9 +245,7 @@ def test_estimate_aime_partial_career() -> None:
 
 def test_estimate_aime_over_35_years_clamped() -> None:
     """40 years same as 35 — extra years don't raise AIME."""
-    assert estimate_aime(100_000.0, career_years=40) == estimate_aime(
-        100_000.0, career_years=35
-    )
+    assert estimate_aime(100_000.0, career_years=40) == estimate_aime(100_000.0, career_years=35)
 
 
 def test_estimate_aime_rejects_zero_years() -> None:

@@ -102,12 +102,14 @@ def test_cross_asset_join_on_date() -> None:
     dates_b = [date(2020, 1, 3), date(2020, 1, 4), date(2020, 1, 5)]
 
     asset_a = Asset(
-        name="A", ticker="A",
+        name="A",
+        ticker="A",
         returns=pl.DataFrame({"date": dates_a, "returns": [0.01, 0.02, -0.01]}),
         frequency="daily",
     )
     asset_b = Asset(
-        name="B", ticker="B",
+        name="B",
+        ticker="B",
         returns=pl.DataFrame({"date": dates_b, "returns": [0.005, -0.003, 0.007]}),
         frequency="daily",
     )

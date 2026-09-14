@@ -47,16 +47,14 @@ class Aggregate:
         missing = [p.name for p in self._portfolios if p.initial_wealth is None]
         if missing:
             raise ValueError(
-                f"initial_wealth is required for all portfolios in an Aggregate. "
-                f"Missing: {missing}"
+                f"initial_wealth is required for all portfolios in an Aggregate. Missing: {missing}"
             )
 
         names = [p.name for p in self._portfolios]
         if len(names) != len(set(names)):
             dupes = sorted({n for n in names if names.count(n) > 1})
             raise ValueError(
-                f"Portfolio names must be unique within an Aggregate. "
-                f"Duplicates: {dupes}"
+                f"Portfolio names must be unique within an Aggregate. Duplicates: {dupes}"
             )
 
         if not self._portfolios:

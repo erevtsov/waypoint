@@ -30,7 +30,8 @@ def _make_asset(name: str, ticker: str, mean: float, std: float, seed: int) -> A
     dates = [date(2019, 1, 2) + timedelta(days=i) for i in range(N_PERIODS)]
     values = rng.normal(mean, std, N_PERIODS).tolist()
     return Asset(
-        name=name, ticker=ticker,
+        name=name,
+        ticker=ticker,
         returns=pl.DataFrame({"date": dates, "returns": values}),
         frequency="daily",
     )
@@ -58,12 +59,16 @@ def _make_optimizer() -> Optimizer:
 # EfficientFrontierResult helpers
 # ---------------------------------------------------------------------------
 
+
 def test_frontier_has_correct_number_of_columns() -> None:
     portfolio = _make_portfolio()
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
-        portfolio, start=None, end=None,
-        frequency="daily", n_points=N_POINTS,
+        portfolio,
+        start=None,
+        end=None,
+        frequency="daily",
+        n_points=N_POINTS,
     )
     # expected_return + 3 asset columns
     assert set(result.weights.columns) == {"expected_return", "Equities", "Bonds", "Alternatives"}
@@ -73,8 +78,11 @@ def test_frontier_asset_names_match_portfolio() -> None:
     portfolio = _make_portfolio()
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
-        portfolio, start=None, end=None,
-        frequency="daily", n_points=N_POINTS,
+        portfolio,
+        start=None,
+        end=None,
+        frequency="daily",
+        n_points=N_POINTS,
     )
     assert set(result.asset_names) == {"Equities", "Bonds", "Alternatives"}
 
@@ -83,8 +91,11 @@ def test_frontier_risks_are_non_negative() -> None:
     portfolio = _make_portfolio()
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
-        portfolio, start=None, end=None,
-        frequency="daily", n_points=N_POINTS,
+        portfolio,
+        start=None,
+        end=None,
+        frequency="daily",
+        n_points=N_POINTS,
     )
     assert all(r >= 0.0 for r in result.risks.to_list())
 
@@ -94,8 +105,11 @@ def test_frontier_risks_are_non_decreasing() -> None:
     portfolio = _make_portfolio()
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
-        portfolio, start=None, end=None,
-        frequency="daily", n_points=N_POINTS,
+        portfolio,
+        start=None,
+        end=None,
+        frequency="daily",
+        n_points=N_POINTS,
     )
     risks = result.risks.to_list()
     for i in range(1, len(risks)):
@@ -107,8 +121,11 @@ def test_frontier_returns_are_non_decreasing() -> None:
     portfolio = _make_portfolio()
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
-        portfolio, start=None, end=None,
-        frequency="daily", n_points=N_POINTS,
+        portfolio,
+        start=None,
+        end=None,
+        frequency="daily",
+        n_points=N_POINTS,
     )
     returns = result.expected_returns.to_list()
     for i in range(1, len(returns)):
@@ -121,8 +138,11 @@ def test_frontier_weights_sum_to_one() -> None:
     portfolio = _make_portfolio()
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
-        portfolio, start=None, end=None,
-        frequency="daily", n_points=N_POINTS,
+        portfolio,
+        start=None,
+        end=None,
+        frequency="daily",
+        n_points=N_POINTS,
     )
     for row in result.weights.iter_rows(named=True):
         weight_sum = sum(row[name] for name in result.asset_names)
@@ -134,8 +154,11 @@ def test_frontier_weights_non_negative_with_long_only() -> None:
     portfolio = _make_portfolio()
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
-        portfolio, start=None, end=None,
-        frequency="daily", n_points=N_POINTS,
+        portfolio,
+        start=None,
+        end=None,
+        frequency="daily",
+        n_points=N_POINTS,
     )
     for row in result.weights.iter_rows(named=True):
         for name in result.asset_names:
@@ -146,12 +169,16 @@ def test_frontier_weights_non_negative_with_long_only() -> None:
 # optimal_sharpe
 # ---------------------------------------------------------------------------
 
+
 def test_optimal_sharpe_returns_valid_weights() -> None:
     portfolio = _make_portfolio()
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
-        portfolio, start=None, end=None,
-        frequency="daily", n_points=N_POINTS,
+        portfolio,
+        start=None,
+        end=None,
+        frequency="daily",
+        n_points=N_POINTS,
     )
     sharpe_weights = result.optimal_sharpe(risk_free_rate=0.02)
     assert set(sharpe_weights.keys()) == set(result.asset_names)
@@ -163,8 +190,11 @@ def test_optimal_sharpe_weights_are_floats() -> None:
     portfolio = _make_portfolio()
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
-        portfolio, start=None, end=None,
-        frequency="daily", n_points=N_POINTS,
+        portfolio,
+        start=None,
+        end=None,
+        frequency="daily",
+        n_points=N_POINTS,
     )
     sharpe_weights = result.optimal_sharpe()
     for v in sharpe_weights.values():
@@ -175,18 +205,23 @@ def test_optimal_sharpe_weights_are_floats() -> None:
 # portfolio_at / min_volatility_portfolio / max_sharpe_portfolio
 # ---------------------------------------------------------------------------
 
+
 def _make_frontier() -> tuple[Portfolio, EfficientFrontierResult]:
     portfolio = _make_portfolio()
     optimizer = _make_optimizer()
     result = optimizer.efficient_frontier(
-        portfolio, start=None, end=None,
-        frequency="daily", n_points=N_POINTS,
+        portfolio,
+        start=None,
+        end=None,
+        frequency="daily",
+        n_points=N_POINTS,
     )
     return portfolio, result
 
 
 def test_portfolio_at_returns_portfolio_instance() -> None:
     from waypoint.portfolio import Portfolio as P
+
     source, result = _make_frontier()
     p = result.portfolio_at(source, 0)
     assert isinstance(p, P)

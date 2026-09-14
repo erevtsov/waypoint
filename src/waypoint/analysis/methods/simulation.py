@@ -95,7 +95,8 @@ class MonteCarlo:
                 bad = np.argwhere(~np.isfinite(sigma_arr))
                 raise ValueError(
                     f"Covariance matrix contains non-finite values at indices {bad.tolist()}. "
-                    "Check that all assets have overlapping return history and no zero-variance series."
+                    "Check that all assets have overlapping return history and "
+                    "no zero-variance series."
                 )
             # Project onto the nearest positive-definite matrix: decompose via
             # eigh (symmetric eigendecomposition), clip any negative eigenvalues
@@ -171,8 +172,7 @@ class Bootstrap:
 
         if max_start <= 0:
             raise ValueError(
-                f"historical_returns length ({n_hist}) must exceed "
-                f"block_size ({self.block_size})."
+                f"historical_returns length ({n_hist}) must exceed block_size ({self.block_size})."
             )
 
         # Determine how many blocks needed to cover n_periods

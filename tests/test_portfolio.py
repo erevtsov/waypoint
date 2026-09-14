@@ -16,6 +16,7 @@ from waypoint.portfolio import Portfolio
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_asset(name: str, ticker: str, n: int = 100, seed: int = 42) -> Asset:
     rng = np.random.default_rng(seed=seed)
     dates = [date(2020, 1, 1) + timedelta(days=i) for i in range(n)]
@@ -27,6 +28,7 @@ def _make_asset(name: str, ticker: str, n: int = 100, seed: int = 42) -> Asset:
 # ---------------------------------------------------------------------------
 # Construction
 # ---------------------------------------------------------------------------
+
 
 def test_portfolio_construction() -> None:
     eq = _make_asset("Equities", "SPY")
@@ -125,8 +127,7 @@ def test_normalize_weights_false_preserves_weights() -> None:
     eq = _make_asset("Equities", "SPY")
     fi = _make_asset("Bonds", "AGG", seed=7)
     # 150% long equity, 50% short bonds → net 100%, gross 200%
-    p = Portfolio({"eq": eq, "fi": fi}, weights={"eq": 1.5, "fi": -0.5},
-                  normalize_weights=False)
+    p = Portfolio({"eq": eq, "fi": fi}, weights={"eq": 1.5, "fi": -0.5}, normalize_weights=False)
     assert abs(p.weights["eq"] - 1.5) < 1e-9
     assert abs(p.weights["fi"] - (-0.5)) < 1e-9
 
@@ -135,14 +136,14 @@ def test_normalize_weights_false_zero_sum_allowed() -> None:
     """Dollar-neutral portfolio: weights summing to zero is valid when not normalising."""
     eq = _make_asset("Equities", "SPY")
     fi = _make_asset("Bonds", "AGG", seed=7)
-    p = Portfolio({"eq": eq, "fi": fi}, weights={"eq": 1.0, "fi": -1.0},
-                  normalize_weights=False)
+    p = Portfolio({"eq": eq, "fi": fi}, weights={"eq": 1.0, "fi": -1.0}, normalize_weights=False)
     assert abs(sum(p.weights.values())) < 1e-9  # net zero
 
 
 # ---------------------------------------------------------------------------
 # get_returns
 # ---------------------------------------------------------------------------
+
 
 def test_get_returns_wide_schema() -> None:
     eq = _make_asset("Equities", "SPY", n=50)
@@ -158,12 +159,14 @@ def test_get_returns_aligned_on_date() -> None:
     dates_a = [date(2020, 1, 1) + timedelta(days=i) for i in range(5)]
     dates_b = [date(2020, 1, 3) + timedelta(days=i) for i in range(5)]
     a = Asset(
-        name="A", ticker="A",
+        name="A",
+        ticker="A",
         returns=pl.DataFrame({"date": dates_a, "returns": [0.01] * 5}),
         frequency="daily",
     )
     b = Asset(
-        name="B", ticker="B",
+        name="B",
+        ticker="B",
         returns=pl.DataFrame({"date": dates_b, "returns": [0.02] * 5}),
         frequency="daily",
     )
@@ -195,6 +198,7 @@ def test_get_returns_cached() -> None:
 
 def test_assetdef_slots_require_dates() -> None:
     from waypoint.asset_def import AssetDef
+
     ad = AssetDef(name="X", symbol="SPY", vendor="yfinance", frequency="daily")
     p = Portfolio({"x": ad}, weights={"x": 1.0})
     with pytest.raises(ValueError, match="start and end are required"):
@@ -204,6 +208,7 @@ def test_assetdef_slots_require_dates() -> None:
 # ---------------------------------------------------------------------------
 # portfolio_returns
 # ---------------------------------------------------------------------------
+
 
 def test_portfolio_returns_schema() -> None:
     eq = _make_asset("Equities", "SPY", n=50)
@@ -218,12 +223,14 @@ def test_portfolio_returns_weighted_sum() -> None:
     """Portfolio return = weighted sum of asset returns on each date."""
     d = date(2020, 1, 2)
     a = Asset(
-        name="A", ticker="A",
+        name="A",
+        ticker="A",
         returns=pl.DataFrame({"date": [d], "returns": [0.10]}),
         frequency="daily",
     )
     b = Asset(
-        name="B", ticker="B",
+        name="B",
+        ticker="B",
         returns=pl.DataFrame({"date": [d], "returns": [0.20]}),
         frequency="daily",
     )
@@ -243,7 +250,8 @@ def _make_daily_asset(start: date, n_days: int, value: float = 0.001, seed: int 
     rng = np.random.default_rng(seed=seed)
     values = rng.normal(value, 0.005, n_days).tolist()
     return Asset(
-        name="X", ticker="X",
+        name="X",
+        ticker="X",
         returns=pl.DataFrame({"date": dates, "returns": values}),
         frequency="daily",
     )
@@ -273,8 +281,14 @@ def test_monthly_resample_end_of_month_dates() -> None:
 def _make_quarterly_asset(name: str, ticker: str, n: int = 8) -> Asset:
     """Quarterly asset with *n* end-of-quarter observations starting 2020-Q1."""
     quarter_ends = [
-        date(2020, 3, 31), date(2020, 6, 30), date(2020, 9, 30), date(2020, 12, 31),
-        date(2021, 3, 31), date(2021, 6, 30), date(2021, 9, 30), date(2021, 12, 31),
+        date(2020, 3, 31),
+        date(2020, 6, 30),
+        date(2020, 9, 30),
+        date(2020, 12, 31),
+        date(2021, 3, 31),
+        date(2021, 6, 30),
+        date(2021, 9, 30),
+        date(2021, 12, 31),
     ]
     rng = np.random.default_rng(seed=99)
     values = rng.normal(0.02, 0.03, n).tolist()
@@ -285,6 +299,7 @@ def _make_quarterly_asset(name: str, ticker: str, n: int = 8) -> Asset:
 # ---------------------------------------------------------------------------
 # native_frequency
 # ---------------------------------------------------------------------------
+
 
 def test_native_frequency_all_daily() -> None:
     """All-daily portfolio → native frequency is daily."""
@@ -344,7 +359,8 @@ def test_quarterly_asset_accepted() -> None:
     """Asset with frequency='quarterly' should be constructed without error."""
     dates = [date(2020, 3, 31), date(2020, 6, 30), date(2020, 9, 30), date(2020, 12, 31)]
     asset = Asset(
-        name="Q", ticker="Q",
+        name="Q",
+        ticker="Q",
         returns=pl.DataFrame({"date": dates, "returns": [0.02] * 4}),
         frequency="quarterly",
     )
@@ -378,7 +394,8 @@ def test_mixed_frequency_portfolio_resamples_daily_before_join() -> None:
     # Quarterly asset: 4 end-of-quarter dates with a fixed 2% quarterly return
     q_dates = [date(2021, 3, 31), date(2021, 6, 30), date(2021, 9, 30), date(2021, 12, 31)]
     quarterly_asset = Asset(
-        name="Q", ticker="Q",
+        name="Q",
+        ticker="Q",
         returns=pl.DataFrame({"date": q_dates, "returns": [0.02] * 4}),
         frequency="quarterly",
     )
@@ -386,7 +403,8 @@ def test_mixed_frequency_portfolio_resamples_daily_before_join() -> None:
     daily_r = 0.001
     d_dates = [date(2021, 1, 1) + timedelta(days=i) for i in range(365)]
     daily_asset = Asset(
-        name="D", ticker="D",
+        name="D",
+        ticker="D",
         returns=pl.DataFrame({"date": d_dates, "returns": [daily_r] * 365}),
         frequency="daily",
     )
@@ -413,7 +431,8 @@ def test_quarterly_resample_compounds_correctly() -> None:
     n_days = 63
     dates = [date(2021, 1, 1) + timedelta(days=i) for i in range(n_days)]
     asset = Asset(
-        name="X", ticker="X",
+        name="X",
+        ticker="X",
         returns=pl.DataFrame({"date": dates, "returns": [daily_r] * n_days}),
         frequency="daily",
     )

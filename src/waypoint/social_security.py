@@ -158,8 +158,7 @@ def monthly_benefit(
     """
     if not (MIN_CLAIM_AGE <= claim_age <= MAX_CLAIM_AGE):
         raise ValueError(
-            f"claim_age must be between {MIN_CLAIM_AGE} and {MAX_CLAIM_AGE}, "
-            f"got {claim_age}"
+            f"claim_age must be between {MIN_CLAIM_AGE} and {MAX_CLAIM_AGE}, got {claim_age}"
         )
 
     fra = full_retirement_age(birth_year)

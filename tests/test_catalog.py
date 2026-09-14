@@ -9,6 +9,7 @@ from waypoint.indicator_def import IndicatorDef
 # equities submodule
 # ---------------------------------------------------------------------------
 
+
 def test_equities_entries_are_asset_defs() -> None:
     entries = [
         catalog.equities.US_LARGE_CAP,
@@ -47,6 +48,7 @@ def test_equities_have_non_empty_metadata() -> None:
 # fixed_income submodule
 # ---------------------------------------------------------------------------
 
+
 def test_fixed_income_entries_are_asset_defs() -> None:
     for entry in [
         catalog.fixed_income.US_AGG_BONDS,
@@ -65,6 +67,7 @@ def test_cpi_is_monthly() -> None:
 # real_estate submodule
 # ---------------------------------------------------------------------------
 
+
 def test_real_estate_entries_are_asset_defs() -> None:
     assert isinstance(catalog.real_estate.MA_HPI, AssetDef)
     assert isinstance(catalog.real_estate.BOSTON_HPI, AssetDef)
@@ -78,6 +81,7 @@ def test_real_estate_entries_are_quarterly() -> None:
 # ---------------------------------------------------------------------------
 # indicators submodule
 # ---------------------------------------------------------------------------
+
 
 def test_indicator_entries_are_indicator_defs() -> None:
     for entry in [catalog.indicators.US_10Y_YIELD, catalog.indicators.REAL_RATE_10Y]:

@@ -23,6 +23,7 @@ from waypoint.portfolio import Portfolio
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_asset(name: str, ticker: str, n: int = 200, seed: int = 42) -> Asset:
     rng = np.random.default_rng(seed=seed)
     dates = [date(2020, 1, 1) + timedelta(days=i) for i in range(n)]
@@ -41,14 +42,17 @@ def _two_asset_portfolio(w1: float = 0.6, w2: float = 0.4) -> Portfolio:
 # SampleCovariance
 # ---------------------------------------------------------------------------
 
+
 def test_sample_covariance_shape() -> None:
     """Output matrix must be n_assets × n_assets."""
     rng = np.random.default_rng(seed=42)
-    data = pl.DataFrame({
-        "A": rng.normal(0.001, 0.01, 100).tolist(),
-        "B": rng.normal(0.001, 0.01, 100).tolist(),
-        "C": rng.normal(0.001, 0.01, 100).tolist(),
-    })
+    data = pl.DataFrame(
+        {
+            "A": rng.normal(0.001, 0.01, 100).tolist(),
+            "B": rng.normal(0.001, 0.01, 100).tolist(),
+            "C": rng.normal(0.001, 0.01, 100).tolist(),
+        }
+    )
     method = SampleCovariance()
     cov = method.compute(data, periods_per_year=252)
     assert cov.shape == (3, 3)
@@ -57,10 +61,12 @@ def test_sample_covariance_shape() -> None:
 def test_sample_covariance_is_symmetric() -> None:
     """Covariance matrix must be symmetric."""
     rng = np.random.default_rng(seed=42)
-    data = pl.DataFrame({
-        "A": rng.normal(0.001, 0.01, 200).tolist(),
-        "B": rng.normal(0.001, 0.01, 200).tolist(),
-    })
+    data = pl.DataFrame(
+        {
+            "A": rng.normal(0.001, 0.01, 200).tolist(),
+            "B": rng.normal(0.001, 0.01, 200).tolist(),
+        }
+    )
     method = SampleCovariance()
     cov = method.compute(data, periods_per_year=252)
     np.testing.assert_allclose(cov, cov.T, atol=1e-12)
@@ -69,10 +75,12 @@ def test_sample_covariance_is_symmetric() -> None:
 def test_sample_covariance_diagonal_positive() -> None:
     """Diagonal elements (variances) must be positive."""
     rng = np.random.default_rng(seed=42)
-    data = pl.DataFrame({
-        "A": rng.normal(0.001, 0.01, 200).tolist(),
-        "B": rng.normal(0.001, 0.01, 200).tolist(),
-    })
+    data = pl.DataFrame(
+        {
+            "A": rng.normal(0.001, 0.01, 200).tolist(),
+            "B": rng.normal(0.001, 0.01, 200).tolist(),
+        }
+    )
     method = SampleCovariance()
     cov = method.compute(data, periods_per_year=252)
     assert all(cov[i, i] > 0 for i in range(2))
@@ -81,10 +89,12 @@ def test_sample_covariance_diagonal_positive() -> None:
 def test_sample_covariance_scales_with_periods() -> None:
     """Covariance should scale linearly with periods_per_year."""
     rng = np.random.default_rng(seed=42)
-    data = pl.DataFrame({
-        "A": rng.normal(0.001, 0.01, 200).tolist(),
-        "B": rng.normal(0.001, 0.01, 200).tolist(),
-    })
+    data = pl.DataFrame(
+        {
+            "A": rng.normal(0.001, 0.01, 200).tolist(),
+            "B": rng.normal(0.001, 0.01, 200).tolist(),
+        }
+    )
     method = SampleCovariance()
     cov_12 = method.compute(data, periods_per_year=12)
     cov_252 = method.compute(data, periods_per_year=252)
@@ -95,6 +105,7 @@ def test_sample_covariance_scales_with_periods() -> None:
 # ---------------------------------------------------------------------------
 # Risk.compute
 # ---------------------------------------------------------------------------
+
 
 def test_risk_covariance_columns_are_asset_names() -> None:
     """Covariance DataFrame columns must be the asset names."""
@@ -167,6 +178,7 @@ def test_risk_result_is_frozen() -> None:
 # ViewRisk — historical correlations mode
 # ---------------------------------------------------------------------------
 
+
 def test_view_risk_historical_corr_shape() -> None:
     """ViewRisk must return a (n_assets, n_assets) matrix."""
     portfolio = _two_asset_portfolio()
@@ -192,12 +204,14 @@ def test_view_risk_historical_corr_preserves_correlation_sign() -> None:
     base = rng.normal(0.001, 0.01, n)
     # Positively correlated pair
     a = Asset(
-        name="A", ticker="A",
+        name="A",
+        ticker="A",
         returns=pl.DataFrame({"date": dates, "returns": (base + rng.normal(0, 0.005, n)).tolist()}),
         frequency="daily",
     )
     b = Asset(
-        name="B", ticker="B",
+        name="B",
+        ticker="B",
         returns=pl.DataFrame({"date": dates, "returns": (base + rng.normal(0, 0.005, n)).tolist()}),
         frequency="daily",
     )
@@ -212,6 +226,7 @@ def test_view_risk_historical_corr_preserves_correlation_sign() -> None:
 # ---------------------------------------------------------------------------
 # ViewRisk — manual correlation matrix mode
 # ---------------------------------------------------------------------------
+
 
 def test_view_risk_manual_corr_uses_provided_matrix() -> None:
     """When correlation_matrix is supplied, historical data is not used for correlations."""
@@ -245,6 +260,7 @@ def test_view_risk_manual_corr_diagonal_matches_custom_vols() -> None:
 # ViewRisk — mutual exclusion invariant
 # ---------------------------------------------------------------------------
 
+
 def test_view_risk_both_sources_raises() -> None:
     """Supplying both correlation_matrix and correlation_method must raise at construction."""
     with pytest.raises(ValueError, match="not both"):
@@ -266,6 +282,7 @@ def test_view_risk_neither_source_defaults_to_sample_covariance() -> None:
 # ---------------------------------------------------------------------------
 # ViewRisk — for_portfolio classmethod
 # ---------------------------------------------------------------------------
+
 
 def test_view_risk_for_portfolio_validates_missing_vols() -> None:
     """for_portfolio raises ValueError when a slot is missing from volatilities."""
@@ -309,6 +326,7 @@ def test_view_risk_missing_asset_at_compute_raises() -> None:
 # LedoitWolf
 # ---------------------------------------------------------------------------
 
+
 def _make_returns_df(n: int = 250, p: int = 3, seed: int = 42) -> pl.DataFrame:
     rng = np.random.default_rng(seed=seed)
     data = {f"A{i}": rng.normal(0.0003, 0.01, n).tolist() for i in range(p)}
@@ -345,11 +363,13 @@ def test_ledoit_wolf_scales_with_periods() -> None:
     rng = np.random.default_rng(seed=77)
     n = 100
     base = rng.normal(0, 0.01, n)
-    data = pl.DataFrame({
-        "A": (base + rng.normal(0, 0.005, n)).tolist(),
-        "B": (base + rng.normal(0, 0.015, n)).tolist(),
-        "C": (base * 0.5 + rng.normal(0, 0.02, n)).tolist(),
-    })
+    data = pl.DataFrame(
+        {
+            "A": (base + rng.normal(0, 0.005, n)).tolist(),
+            "B": (base + rng.normal(0, 0.015, n)).tolist(),
+            "C": (base * 0.5 + rng.normal(0, 0.02, n)).tolist(),
+        }
+    )
     cov_12 = LedoitWolf().compute(data, periods_per_year=12)
     cov_252 = LedoitWolf().compute(data, periods_per_year=252)
     np.testing.assert_allclose(cov_252 / cov_12, 252 / 12, rtol=1e-10)
@@ -359,11 +379,13 @@ def test_ledoit_wolf_diagonal_shrunk_toward_mean_variance() -> None:
     """With very few observations the diagonal must be pulled toward the mean variance."""
     rng = np.random.default_rng(seed=10)
     # Large spread of variances so shrinkage is clearly visible.
-    data = pl.DataFrame({
-        "A": rng.normal(0, 0.20, 30).tolist(),  # high vol
-        "B": rng.normal(0, 0.01, 30).tolist(),  # low vol
-        "C": rng.normal(0, 0.05, 30).tolist(),
-    })
+    data = pl.DataFrame(
+        {
+            "A": rng.normal(0, 0.20, 30).tolist(),  # high vol
+            "B": rng.normal(0, 0.01, 30).tolist(),  # low vol
+            "C": rng.normal(0, 0.05, 30).tolist(),
+        }
+    )
     lw = LedoitWolf().compute(data, periods_per_year=252)
     sc = SampleCovariance().compute(data, periods_per_year=252)
     # LW diagonal variance for high-vol asset should be less than sample
@@ -403,6 +425,7 @@ def test_ledoit_wolf_integration() -> None:
 # EWMACovariance
 # ---------------------------------------------------------------------------
 
+
 def test_ewma_covariance_shape() -> None:
     """Output must be (p, p)."""
     data = _make_returns_df(p=3)
@@ -435,10 +458,12 @@ def test_ewma_covariance_scales_with_periods() -> None:
 def test_ewma_decay_one_approaches_sample_covariance() -> None:
     """decay_factor → 1 gives equal weights, converging to the biased sample covariance."""
     rng = np.random.default_rng(seed=3)
-    data = pl.DataFrame({
-        "A": rng.normal(0, 0.01, 500).tolist(),
-        "B": rng.normal(0, 0.01, 500).tolist(),
-    })
+    data = pl.DataFrame(
+        {
+            "A": rng.normal(0, 0.01, 500).tolist(),
+            "B": rng.normal(0, 0.01, 500).tolist(),
+        }
+    )
     ewma = EWMACovariance(decay_factor=0.9999).compute(data, periods_per_year=1)
     # biased sample cov (1/T)
     arr = data.to_numpy()

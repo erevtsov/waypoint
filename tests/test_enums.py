@@ -8,6 +8,7 @@ from waypoint.enums import PERIODS_PER_YEAR, CashflowMode, Frequency
 # Frequency
 # ---------------------------------------------------------------------------
 
+
 def test_frequency_str_equality() -> None:
     assert Frequency.DAILY == "daily"
     assert Frequency.WEEKLY == "weekly"
@@ -44,6 +45,7 @@ def test_periods_per_year_str_lookup() -> None:
 # ---------------------------------------------------------------------------
 # CashflowMode
 # ---------------------------------------------------------------------------
+
 
 def test_cashflow_mode_str_equality() -> None:
     assert CashflowMode.DOLLAR == "dollar"

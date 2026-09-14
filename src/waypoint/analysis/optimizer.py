@@ -98,9 +98,7 @@ class EfficientFrontierResult:
         """
         return self.portfolio_at(source, 0)
 
-    def max_sharpe_portfolio(
-        self, source: Portfolio, risk_free_rate: float = 0.0
-    ) -> Portfolio:
+    def max_sharpe_portfolio(self, source: Portfolio, risk_free_rate: float = 0.0) -> Portfolio:
         """Return the maximum Sharpe ratio ``Portfolio`` from the frontier.
 
         Parameters

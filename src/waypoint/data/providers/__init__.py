@@ -26,8 +26,7 @@ def get_provider(vendor: str) -> Provider:
         return _REGISTRY[vendor]
     except KeyError:
         raise KeyError(
-            f"Unknown vendor {vendor!r}. "
-            f"Available vendors: {sorted(_REGISTRY)}"
+            f"Unknown vendor {vendor!r}. Available vendors: {sorted(_REGISTRY)}"
         ) from None
 
 

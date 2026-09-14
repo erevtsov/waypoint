@@ -22,7 +22,7 @@ def test_to_returns_length() -> None:
 def test_to_returns_values() -> None:
     df = _price_df([100.0, 110.0, 99.0])
     result = to_returns(df)
-    assert abs(result["returns"][0] - 0.10) < 1e-9    # +10%
+    assert abs(result["returns"][0] - 0.10) < 1e-9  # +10%
     assert abs(result["returns"][1] - (-0.10)) < 1e-9  # -10% (110 → 99)
 
 

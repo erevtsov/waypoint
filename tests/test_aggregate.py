@@ -28,6 +28,7 @@ def _port(
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_asset(name: str, ticker: str, n: int = 100, seed: int = 42) -> Asset:
     rng = np.random.default_rng(seed=seed)
     dates = [date(2020, 1, 1) + timedelta(days=i) for i in range(n)]
@@ -51,6 +52,7 @@ def _make_portfolio(name: str, initial_wealth: float | None = None, seed: int = 
 # Portfolio.initial_wealth
 # ---------------------------------------------------------------------------
 
+
 def test_portfolio_initial_wealth_defaults_none() -> None:
     p = _make_portfolio("taxable")
     assert p.initial_wealth is None
@@ -70,6 +72,7 @@ def test_portfolio_initial_wealth_is_mutable() -> None:
 # ---------------------------------------------------------------------------
 # Aggregate construction
 # ---------------------------------------------------------------------------
+
 
 def test_aggregate_construction() -> None:
     taxable = _make_portfolio("taxable", 500_000.0)
@@ -100,6 +103,7 @@ def test_aggregate_requires_at_least_one_portfolio() -> None:
 # wealth_weights
 # ---------------------------------------------------------------------------
 
+
 def test_wealth_weights_sum_to_one() -> None:
     taxable = _make_portfolio("taxable", 500_000.0)
     retirement = _make_portfolio("401k", 300_000.0, seed=10)
@@ -127,6 +131,7 @@ def test_wealth_weights_single_portfolio() -> None:
 # ---------------------------------------------------------------------------
 # flatten
 # ---------------------------------------------------------------------------
+
 
 def test_flatten_weights_sum_to_one() -> None:
     eq = _make_asset("Equities", "SPY")
@@ -196,12 +201,18 @@ def test_flatten_propagates_common_expected_return_method() -> None:
     eq = _make_asset("Equities", "SPY")
     fi = _make_asset("Bonds", "AGG", seed=1)
     p1 = Portfolio(
-        {"eq": eq, "fi": fi}, weights={"eq": 0.6, "fi": 0.4}, name="p1",
-        initial_wealth=600_000.0, expected_return_method=ArithmeticMean(),
+        {"eq": eq, "fi": fi},
+        weights={"eq": 0.6, "fi": 0.4},
+        name="p1",
+        initial_wealth=600_000.0,
+        expected_return_method=ArithmeticMean(),
     )
     p2 = Portfolio(
-        {"eq": eq, "fi": fi}, weights={"eq": 0.5, "fi": 0.5}, name="p2",
-        initial_wealth=400_000.0, expected_return_method=ArithmeticMean(),
+        {"eq": eq, "fi": fi},
+        weights={"eq": 0.5, "fi": 0.5},
+        name="p2",
+        initial_wealth=400_000.0,
+        expected_return_method=ArithmeticMean(),
     )
     flat = Aggregate([p1, p2]).flatten()
     assert isinstance(flat.expected_return_method, ArithmeticMean)
@@ -212,12 +223,18 @@ def test_flatten_propagates_common_risk_method() -> None:
     eq = _make_asset("Equities", "SPY")
     fi = _make_asset("Bonds", "AGG", seed=1)
     p1 = Portfolio(
-        {"eq": eq, "fi": fi}, weights={"eq": 0.6, "fi": 0.4}, name="p1",
-        initial_wealth=600_000.0, risk_method=LedoitWolf(),
+        {"eq": eq, "fi": fi},
+        weights={"eq": 0.6, "fi": 0.4},
+        name="p1",
+        initial_wealth=600_000.0,
+        risk_method=LedoitWolf(),
     )
     p2 = Portfolio(
-        {"eq": eq, "fi": fi}, weights={"eq": 0.5, "fi": 0.5}, name="p2",
-        initial_wealth=400_000.0, risk_method=LedoitWolf(),
+        {"eq": eq, "fi": fi},
+        weights={"eq": 0.5, "fi": 0.5},
+        name="p2",
+        initial_wealth=400_000.0,
+        risk_method=LedoitWolf(),
     )
     flat = Aggregate([p1, p2]).flatten()
     assert isinstance(flat.risk_method, LedoitWolf)
@@ -237,12 +254,18 @@ def test_flatten_differing_expected_return_methods_raises() -> None:
     """Portfolios with different ER methods raise ValueError when flattened."""
     eq = _make_asset("Equities", "SPY")
     p1 = Portfolio(
-        {"eq": eq}, weights={"eq": 1.0}, name="p1",
-        initial_wealth=500_000.0, expected_return_method=ArithmeticMean(),
+        {"eq": eq},
+        weights={"eq": 1.0},
+        name="p1",
+        initial_wealth=500_000.0,
+        expected_return_method=ArithmeticMean(),
     )
     p2 = Portfolio(
-        {"eq": eq}, weights={"eq": 1.0}, name="p2",
-        initial_wealth=500_000.0, expected_return_method=GeometricMean(),
+        {"eq": eq},
+        weights={"eq": 1.0},
+        name="p2",
+        initial_wealth=500_000.0,
+        expected_return_method=GeometricMean(),
     )
     with pytest.raises(ValueError, match="expected_return_method"):
         Aggregate([p1, p2]).flatten()
@@ -252,12 +275,18 @@ def test_flatten_differing_risk_methods_raises() -> None:
     """Portfolios with different risk methods raise ValueError when flattened."""
     eq = _make_asset("Equities", "SPY")
     p1 = Portfolio(
-        {"eq": eq}, weights={"eq": 1.0}, name="p1",
-        initial_wealth=500_000.0, risk_method=SampleCovariance(),
+        {"eq": eq},
+        weights={"eq": 1.0},
+        name="p1",
+        initial_wealth=500_000.0,
+        risk_method=SampleCovariance(),
     )
     p2 = Portfolio(
-        {"eq": eq}, weights={"eq": 1.0}, name="p2",
-        initial_wealth=500_000.0, risk_method=LedoitWolf(),
+        {"eq": eq},
+        weights={"eq": 1.0},
+        name="p2",
+        initial_wealth=500_000.0,
+        risk_method=LedoitWolf(),
     )
     with pytest.raises(ValueError, match="risk_method"):
         Aggregate([p1, p2]).flatten()
@@ -267,12 +296,18 @@ def test_data_window_unaffected_by_differing_methods() -> None:
     """data_window() works even when portfolios have different method settings."""
     eq = _make_asset("Equities", "SPY")
     p1 = Portfolio(
-        {"eq": eq}, weights={"eq": 1.0}, name="p1",
-        initial_wealth=500_000.0, expected_return_method=ArithmeticMean(),
+        {"eq": eq},
+        weights={"eq": 1.0},
+        name="p1",
+        initial_wealth=500_000.0,
+        expected_return_method=ArithmeticMean(),
     )
     p2 = Portfolio(
-        {"eq": eq}, weights={"eq": 1.0}, name="p2",
-        initial_wealth=500_000.0, expected_return_method=GeometricMean(),
+        {"eq": eq},
+        weights={"eq": 1.0},
+        name="p2",
+        initial_wealth=500_000.0,
+        expected_return_method=GeometricMean(),
     )
     # Should not raise even though methods differ
     window = Aggregate([p1, p2]).data_window()
@@ -282,6 +317,7 @@ def test_data_window_unaffected_by_differing_methods() -> None:
 # ---------------------------------------------------------------------------
 # run
 # ---------------------------------------------------------------------------
+
 
 def test_run_returns_per_portfolio_results() -> None:
     """run() calls analytic.compute per portfolio and keys by name."""

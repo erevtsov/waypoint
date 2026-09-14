@@ -53,9 +53,7 @@ def test_load_or_fetch_writes_and_reads_cache(tmp_path: pytest.fixture) -> None:
         class _FakeProvider:
             called: int = 0
 
-            def fetch_raw(
-                self, symbol: str, start: date, end: date
-            ) -> pl.DataFrame:
+            def fetch_raw(self, symbol: str, start: date, end: date) -> pl.DataFrame:
                 self.called += 1
                 return fake_df
 
@@ -100,9 +98,7 @@ def test_force_refresh_bypasses_cache(tmp_path: pytest.fixture) -> None:  # type
         class _FakeProvider:
             called: int = 0
 
-            def fetch_raw(
-                self, symbol: str, start: date, end: date
-            ) -> pl.DataFrame:
+            def fetch_raw(self, symbol: str, start: date, end: date) -> pl.DataFrame:
                 self.called += 1
                 return fake_df
 
@@ -142,9 +138,7 @@ def test_second_call_with_holiday_end_does_not_error(tmp_path: pytest.fixture) -
 
             def fetch_raw(self, symbol: str, start: date, end: date) -> pl.DataFrame:
                 self.called += 1
-                result = trading_df.filter(
-                    (pl.col("date") >= start) & (pl.col("date") <= end)
-                )
+                result = trading_df.filter((pl.col("date") >= start) & (pl.col("date") <= end))
                 if result.is_empty():
                     raise ValueError(f"No data for {symbol} between {start} and {end}")
                 return result
