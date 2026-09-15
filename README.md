@@ -10,6 +10,8 @@ All internal data is **decimal periodic returns** (0.01 = 1%) — never raw pric
 uv add waypoint
 ```
 
+For local development, see `AGENTS.md` — `just check` runs the full lint/type/test gate.
+
 Optional extras include vendor data providers:
 
 ```bash
