@@ -21,13 +21,13 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "cvxpy>=1.9",
-    "numpy>=2.5",
+    "cvxpy>=1.9.3",
+    "numpy>=2.5.3",
     "plotly>=7.1",
-    "polars>=1.44",
-    "pyarrow>=25.0",
-    "python-dotenv>=1.2",
-    "scipy>=1.18",
+    "polars>=1.44.2",
+    "pyarrow>=25.0.1",
+    "python-dotenv>=1.2.4",
+    "scipy>=1.18.1",
 ]
 
 [project.optional-dependencies]
@@ -36,15 +36,15 @@ fred     = ["fredapi>=0.5"]
 eodhd    = ["eodhd>=1.0"]
 data     = ["waypoint[yfinance,fred,eodhd]"]
 test = [
-    "pytest>=9.1",
+    "pytest>=9.1.1",
     "pytest-cov>=7.1",
-    "hypothesis>=6.168",
+    "hypothesis>=6.168.3",
 ]
 lint = [
-    "ruff>=0.16",
+    "ruff>=0.16.10",
 ]
 typecheck = [
-    "mypy>=2.3",
+    "mypy>=2.4",
 ]
 notebook = [
     "ipykernel>=6.0",
